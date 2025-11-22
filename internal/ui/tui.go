@@ -59,9 +59,7 @@ func NewModel(ctx *AppContext, s ssh.Session) Model {
 	publicKey := ""
 	if s.PublicKey() != nil {
 		publicKey = string(gossh.MarshalAuthorizedKey(s.PublicKey()))
-		fmt.Printf("DEBUG NewModel: SSH public key extracted, length=%d\n", len(publicKey))
 	} else {
-		fmt.Printf("DEBUG NewModel: No SSH public key found in session\n")
 	}
 
 	return Model{
@@ -140,7 +138,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.authorized {
 			// User authorized! Load user info
-			fmt.Printf("DEBUG pollResultMsg: authorized=true, userID=%d, publicKey length=%d\n", msg.userID, len(m.publicKey))
 			return m, loadUserCmd(m.ctx, msg.userID, m.publicKey, m.deviceAuth.DeviceCode)
 		}
 		// Continue polling
@@ -289,7 +286,6 @@ func tickCmd() tea.Cmd {
 // loadUserCmd loads user info and associates SSH key
 func loadUserCmd(ctx *AppContext, userID int, publicKey, deviceCode string) tea.Cmd {
 	return func() tea.Msg {
-		fmt.Printf("DEBUG loadUserCmd: userID=%d, publicKey length=%d\n", userID, len(publicKey))
 
 		// Get user
 		var user models.User
@@ -320,7 +316,6 @@ func loadUserCmd(ctx *AppContext, userID int, publicKey, deviceCode string) tea.
 				fmt.Printf("SSH key saved successfully: ID=%d, fingerprint=%s\n", key.ID, key.Fingerprint)
 			}
 		} else {
-			fmt.Printf("WARNING: publicKey is empty, cannot save SSH key\n")
 		}
 
 		return authenticatedMsg{user: &user}
@@ -412,20 +407,20 @@ func (m Model) renderLoginWaiting() string {
 ║        Waiting for Authorization           ║
 ╠════════════════════════════════════════════╣
 ║                                            ║
-║  1. Open your browser and visit:          ║
+║  1. Open your browser and visit:           ║
 ║                                            ║
 ║     http://51.91.97.241/device             ║
 ║                                            ║
 ║  2. Enter this code:                       ║
 ║                                            ║
-║     ┌────────────┐                         ║
-║     │  %s  │                         ║
-║     └────────────┘                         ║
+║     ┌─────────────┐                        ║
+║     │  %s  │                               ║
+║     └─────────────┘                        ║
 ║                                            ║
 ║  3. Authorize terminalpub access           ║
 ║                                            ║
 ║  Waiting for authorization...              ║
-║  ⏱  Code expires in: %02d:%02d               ║
+║  ⏱  Code expires in: %02d:%02d            ║
 ║                                            ║
 ║  [Esc] Cancel                              ║
 ║                                            ║
@@ -442,27 +437,27 @@ func (m Model) renderAuthenticated() string {
 	}
 
 	return fmt.Sprintf(`
-╔════════════════════════════════════════════╗
-║        🎉 Successfully Logged In!          ║
-╠════════════════════════════════════════════╣
-║                                            ║
-║  Welcome, @%-33s ║
-║                                            ║
-║  Your SSH key has been associated with     ║
-║  your account. Next time you connect,      ║
-║  you'll be automatically logged in!        ║
-║                                            ║
-║  Available features:                       ║
-║  • View your Mastodon feed                 ║
-║  • Post to the fediverse                   ║
-║  • Interact with posts (like, boost)       ║
-║  • Chat roulette                           ║
-║                                            ║
-║  [Coming in Phase 3]                       ║
-║                                            ║
-║  [Q] Quit                                  ║
-║                                            ║
-╚════════════════════════════════════════════╝
+╔═════════════════════════════════════════════╗
+║        🎉 Successfully Logged In!           ║
+╠═════════════════════════════════════════════╣
+║                                             ║
+║  Welcome, @%-33s║
+║                                             ║
+║  Your SSH key has been associated with      ║
+║  your account. Next time you connect,       ║
+║  you'll be automatically logged in!         ║
+║                                             ║
+║  Available features:                        ║
+║  • View your Mastodon feed                  ║
+║  • Post to the fediverse                    ║
+║  • Interact with posts (like, boost)        ║
+║  • Chat roulette                            ║
+║                                             ║
+║  [Coming in Phase 3]                        ║
+║                                             ║
+║  [Q] Quit                                   ║
+║                                             ║
+╚═════════════════════════════════════════════╝
 
 %s
 `, username, m.message)

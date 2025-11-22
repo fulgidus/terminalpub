@@ -8,7 +8,7 @@
 terminalpub
 worker
 server
-!server/*
+!cmd/server/*
 migrate
 terminalpub-*
 

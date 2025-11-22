@@ -64,10 +64,10 @@ func (s *SSHKeyService) GetUserBySSHKey(ctx context.Context, publicKeyStr string
 
 	// Look up user by fingerprint (faster) or public key
 	query := `
-		SELECT u.id, u.username, u.email, u.password_hash, u.primary_mastodon_instance,
-		       u.primary_mastodon_id, u.primary_mastodon_acct, u.private_key, u.public_key,
+		SELECT u.id, u.username, u.email, COALESCE(u.password_hash, ''), COALESCE(u.primary_mastodon_instance, ''),
+		       COALESCE(u.primary_mastodon_id, ''), COALESCE(u.primary_mastodon_acct, ''), u.private_key, u.public_key,
 		       u.actor_url, u.inbox_url, u.outbox_url, u.followers_url, u.following_url,
-		       u.created_at, u.updated_at, u.bio, u.avatar_url
+		       u.created_at, u.updated_at, COALESCE(u.bio, ''), COALESCE(u.avatar_url, '')
 		FROM users u
 		INNER JOIN user_ssh_keys k ON k.user_id = u.id
 		WHERE k.fingerprint = $1 OR k.public_key = $2

@@ -55,12 +55,15 @@ func main() {
 	}()
 
 	// Setup SSH server
+	// Note: Public key authentication is REQUIRED
+	// Users must have an SSH key pair to connect
 	sshServer, err := wish.NewServer(
 		wish.WithAddress(fmt.Sprintf("0.0.0.0:%s", cfg.Server.SSHPort)),
 		wish.WithHostKeyPath(".ssh/term_ed25519"),
 		wish.WithPublicKeyAuth(func(ctx ssh.Context, key ssh.PublicKey) bool {
 			// Accept all public keys - we don't validate them here
-			// Authentication is done via Mastodon OAuth after connection
+			// The public key is associated with the user account after Mastodon OAuth login
+			// On subsequent connections, if the key is found in the database, auto-login occurs
 			return true
 		}),
 		wish.WithMiddleware(

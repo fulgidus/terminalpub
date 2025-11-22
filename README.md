@@ -48,6 +48,24 @@ Connect via SSH:
 ssh localhost
 ```
 
+## SSH Key Requirement
+
+**terminalpub requires SSH public key authentication for all connections.**
+
+If you don't have an SSH key pair, generate one:
+
+```bash
+# Generate an ED25519 key (recommended)
+ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519
+
+# Or generate an RSA key (alternative)
+ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa
+```
+
+Press Enter when prompted for a passphrase (or set one for extra security).
+
+Your SSH key will be automatically associated with your account after your first Mastodon login. On subsequent connections, you'll be automatically logged in!
+
 ## User Experience
 
 ### First Time Connection
@@ -344,3 +362,5 @@ Inspired by the need for a terminal-native way to interact with the fediverse. B
 **Status**: ✅ SSH server deployed and running!
 
 **Connect**: `ssh 51.91.97.241` ✅ LIVE NOW!
+
+**Requirements**: SSH key pair required. Generate with `ssh-keygen -t ed25519` if you don't have one.
