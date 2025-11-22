@@ -54,13 +54,24 @@ func main() {
 
 func teaHandler(s ssh.Session) (tea.Model, []tea.ProgramOption) {
 	m := model{
-		term: s.User(),
+		username: s.User(),
+		screen:   screenWelcome,
 	}
 	return m, []tea.ProgramOption{tea.WithAltScreen()}
 }
 
+type screenType int
+
+const (
+	screenWelcome screenType = iota
+	screenAnonymous
+	screenLogin
+)
+
 type model struct {
-	term string
+	username string
+	screen   screenType
+	message  string
 }
 
 func (m model) Init() tea.Cmd {
@@ -70,29 +81,121 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "ctrl+c":
-			return m, tea.Quit
+		switch m.screen {
+		case screenWelcome:
+			switch msg.String() {
+			case "q", "ctrl+c":
+				return m, tea.Quit
+			case "l", "L":
+				m.screen = screenLogin
+				m.message = "Login feature coming in Phase 2!"
+			case "a", "A":
+				m.screen = screenAnonymous
+				m.message = "Anonymous mode activated!"
+			}
+		case screenAnonymous:
+			switch msg.String() {
+			case "q", "ctrl+c", "esc":
+				return m, tea.Quit
+			case "b", "B":
+				m.screen = screenWelcome
+				m.message = ""
+			}
+		case screenLogin:
+			switch msg.String() {
+			case "q", "ctrl+c", "esc", "b", "B":
+				m.screen = screenWelcome
+				m.message = ""
+			}
 		}
 	}
 	return m, nil
 }
 
 func (m model) View() string {
-	return fmt.Sprintf(`
-╔════════════════════════════════╗
-║     Welcome to terminalpub!    ║
-║     ActivityPub for terminals  ║
-╠════════════════════════════════╣
-║                                ║
-║  Connected as: %-15s ║
-║                                ║
-║  [L] Login with Mastodon       ║
-║  [A] Continue anonymously      ║
-║  [Q] Quit                      ║
-║                                ║
-╚════════════════════════════════╝
+	switch m.screen {
+	case screenWelcome:
+		return m.renderWelcome()
+	case screenAnonymous:
+		return m.renderAnonymous()
+	case screenLogin:
+		return m.renderLogin()
+	default:
+		return "Unknown screen"
+	}
+}
 
-Press 'q' to quit
-`, m.term)
+func (m model) renderWelcome() string {
+	return fmt.Sprintf(`
+╔════════════════════════════════════════════╗
+║        Welcome to terminalpub!             ║
+║        ActivityPub for terminals           ║
+╠════════════════════════════════════════════╣
+║                                            ║
+║  Connected as: %-27s ║
+║                                            ║
+║  Press a key to continue:                  ║
+║                                            ║
+║  [L] Login with Mastodon (Coming soon)     ║
+║  [A] Continue anonymously                  ║
+║  [Q] Quit                                  ║
+║                                            ║
+╚════════════════════════════════════════════╝
+
+%s
+`, m.username, m.message)
+}
+
+func (m model) renderAnonymous() string {
+	return fmt.Sprintf(`
+╔════════════════════════════════════════════╗
+║           Anonymous Mode                   ║
+╠════════════════════════════════════════════╣
+║                                            ║
+║  %s                                        ║
+║                                            ║
+║  You're browsing as: anonymous             ║
+║                                            ║
+║  Available features:                       ║
+║  • View public feed (Coming soon)          ║
+║  • Chat roulette (Coming soon)             ║
+║  • Browse hashtags (Coming soon)           ║
+║                                            ║
+║  Commands:                                 ║
+║  [B] Back to menu                          ║
+║  [Q] Quit                                  ║
+║                                            ║
+╚════════════════════════════════════════════╝
+
+🚧 This is a work in progress!
+Phase 1: Infrastructure ✅
+Phase 2: Authentication (Next)
+Phase 3: ActivityPub Integration
+`, m.message)
+}
+
+func (m model) renderLogin() string {
+	return fmt.Sprintf(`
+╔════════════════════════════════════════════╗
+║        Login with Mastodon                 ║
+╠════════════════════════════════════════════╣
+║                                            ║
+║  %s                                        ║
+║                                            ║
+║  OAuth Device Flow authentication will     ║
+║  be implemented in Phase 2!                ║
+║                                            ║
+║  This will allow you to:                   ║
+║  • Login with your Mastodon account        ║
+║  • Access your federated feed              ║
+║  • Post and interact with the fediverse    ║
+║  • Import your following/followers         ║
+║                                            ║
+║  Stay tuned!                               ║
+║                                            ║
+║  [B] Back to menu                          ║
+║  [Q] Quit                                  ║
+║                                            ║
+╚════════════════════════════════════════════╝
+`, m.message)
 }
