@@ -140,6 +140,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.authorized {
 			// User authorized! Load user info
+			fmt.Printf("DEBUG pollResultMsg: authorized=true, userID=%d, publicKey length=%d\n", msg.userID, len(m.publicKey))
 			return m, loadUserCmd(m.ctx, msg.userID, m.publicKey, m.deviceAuth.DeviceCode)
 		}
 		// Continue polling
