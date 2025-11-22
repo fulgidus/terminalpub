@@ -190,10 +190,10 @@ func (s *UserService) GetOrCreateUser(ctx context.Context, username, email strin
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT (username) DO UPDATE SET
 			updated_at = NOW()
-		RETURNING id, username, email, password_hash, primary_mastodon_instance,
-		          primary_mastodon_id, primary_mastodon_acct, private_key, public_key,
+		RETURNING id, username, email, COALESCE(password_hash, ''), COALESCE(primary_mastodon_instance, ''),
+		          COALESCE(primary_mastodon_id, ''), COALESCE(primary_mastodon_acct, ''), private_key, public_key,
 		          actor_url, inbox_url, outbox_url, followers_url, following_url,
-		          created_at, updated_at, bio, avatar_url
+		          created_at, updated_at, COALESCE(bio, ''), COALESCE(avatar_url, '')
 	`
 
 	user = &models.User{}

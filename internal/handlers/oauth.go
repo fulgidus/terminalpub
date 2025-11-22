@@ -225,5 +225,5 @@ func (h *OAuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Show success message
-	h.showSuccess(w, fmt.Sprintf("✅ Successfully logged in as @%s! You can close this window and return to your SSH session.", token.Username))
+	h.showSuccess(w, fmt.Sprintf("Successfully logged in as @%s! You can close this window and return to your SSH session.", token.Username))
 }

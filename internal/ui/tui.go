@@ -59,6 +59,9 @@ func NewModel(ctx *AppContext, s ssh.Session) Model {
 	publicKey := ""
 	if s.PublicKey() != nil {
 		publicKey = string(gossh.MarshalAuthorizedKey(s.PublicKey()))
+		fmt.Printf("DEBUG NewModel: SSH public key extracted, length=%d\n", len(publicKey))
+	} else {
+		fmt.Printf("DEBUG NewModel: No SSH public key found in session\n")
 	}
 
 	return Model{
@@ -285,6 +288,8 @@ func tickCmd() tea.Cmd {
 // loadUserCmd loads user info and associates SSH key
 func loadUserCmd(ctx *AppContext, userID int, publicKey, deviceCode string) tea.Cmd {
 	return func() tea.Msg {
+		fmt.Printf("DEBUG loadUserCmd: userID=%d, publicKey length=%d\n", userID, len(publicKey))
+
 		// Get user
 		var user models.User
 		err := ctx.DB.QueryRow(
@@ -297,16 +302,24 @@ func loadUserCmd(ctx *AppContext, userID int, publicKey, deviceCode string) tea.
 			&user.PrimaryMastodonAcct, &user.CreatedAt)
 
 		if err != nil {
+			fmt.Printf("Failed to load user: %v\n", err)
 			return authenticatedMsg{user: nil}
 		}
 
 		// Associate SSH key with user
 		if publicKey != "" {
-			_, _ = ctx.SSHKeyService.AddSSHKeyToUser(
+			key, err := ctx.SSHKeyService.AddSSHKeyToUser(
 				context.Background(),
 				userID,
 				publicKey,
 			)
+			if err != nil {
+				fmt.Printf("Failed to save SSH key: %v\n", err)
+			} else {
+				fmt.Printf("SSH key saved successfully: ID=%d, fingerprint=%s\n", key.ID, key.Fingerprint)
+			}
+		} else {
+			fmt.Printf("WARNING: publicKey is empty, cannot save SSH key\n")
 		}
 
 		return authenticatedMsg{user: &user}
