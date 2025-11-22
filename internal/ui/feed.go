@@ -155,7 +155,7 @@ func (m *Model) renderFeedWithPosts() string {
 		b.WriteString("[M] Load more  ")
 	}
 	b.WriteString("\n")
-	b.WriteString("  [X] Like  [S] Boost  [R] Refresh  [B]ack  [Q]uit\n")
+	b.WriteString("  [R] Reply  [X] Like  [S] Boost  [Ctrl+R] Refresh  [B]ack  [Q]uit\n")
 	b.WriteString(fmt.Sprintf("  Post %d/%d  •  %s\n", m.feed.selectedIndex+1, len(m.feed.statuses), statusMsg))
 	b.WriteString(strings.Repeat("─", m.width) + "\n")
 

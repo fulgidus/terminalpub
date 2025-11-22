@@ -149,10 +149,11 @@ Once authenticated, press **[F]** to view your Mastodon feed:
 - **H** - Switch to Home timeline (following only)
 - **L** - Switch to Local timeline (instance posts)
 - **F** - Switch to Federated timeline (all public posts)
+- **R** - Reply to the selected post
 - **X** - Like/favourite the selected post
 - **S** - Boost/reblog the selected post
 - **M** - Load more posts (pagination)
-- **R** - Refresh feed
+- **Ctrl+R** - Refresh feed
 - **B** - Back to main menu
 - **Q** - Quit
 
@@ -163,6 +164,42 @@ The feed shows 5 posts at a time with automatic scrolling. Posts display:
 - Selection indicator (►) for the current post
 
 **Pagination:** Press **[M]** to load 20 more posts. The status bar shows when more posts are available and loading progress.
+
+### Post Composition (Phase 4)
+
+From the main menu, press **[P]** to compose a new post:
+
+```
+╔══════════════════════════════════════════════════════════╗
+║                    Compose New Post                      ║
+╠══════════════════════════════════════════════════════════╣
+║                                                          ║
+║  Write your post:                                        ║
+║  ┌────────────────────────────────────────────────────┐ ║
+║  │ What's on your mind?                               │ ║
+║  │                                                    │ ║
+║  │                                                    │ ║
+║  └────────────────────────────────────────────────────┘ ║
+║                                                          ║
+║  Characters: 0/500                                       ║
+║                                                          ║
+║  Visibility: [public ▼]                                  ║
+║  Content Warning: [ ] Add CW                             ║
+║                                                          ║
+║  [Ctrl+P] Post  [Ctrl+W] Toggle CW  [Ctrl+V] Visibility ║
+║  [Esc] Cancel                                            ║
+╚══════════════════════════════════════════════════════════╝
+```
+
+**Compose Controls:**
+- **Type** - Enter your post content (up to 500 characters)
+- **Ctrl+P** - Publish the post
+- **Ctrl+W** - Toggle content warning
+- **Ctrl+V** - Cycle visibility (public → unlisted → private → direct)
+- **Esc** - Cancel and return to menu
+
+**Reply to Posts:**
+From the feed, press **[R]** on any post to reply. The compose screen will show the original post context and automatically mention the author.
 
 ## Architecture
 

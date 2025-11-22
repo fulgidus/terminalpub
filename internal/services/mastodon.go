@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -266,4 +267,71 @@ func (s *MastodonService) BoostStatus(ctx context.Context, userID int, statusID 
 	}
 
 	return nil
+}
+
+// PostStatusRequest represents the request body for posting a status
+type PostStatusRequest struct {
+	Status      string `json:"status"`
+	Visibility  string `json:"visibility,omitempty"`
+	InReplyToID string `json:"in_reply_to_id,omitempty"`
+	SpoilerText string `json:"spoiler_text,omitempty"`
+}
+
+// PostStatus creates a new status (post) on Mastodon
+func (s *MastodonService) PostStatus(ctx context.Context, userID int, content, visibility, inReplyToID, contentWarning string) (string, error) {
+	var accessToken, instanceURL string
+	err := s.db.QueryRow(ctx, `
+		SELECT access_token, instance_url
+		FROM mastodon_tokens
+		WHERE user_id = $1 AND is_primary = true
+		LIMIT 1
+	`, userID).Scan(&accessToken, &instanceURL)
+
+	if err != nil {
+		return "", fmt.Errorf("failed to get user token: %w", err)
+	}
+
+	// Build request body
+	reqBody := PostStatusRequest{
+		Status:      content,
+		Visibility:  visibility,
+		InReplyToID: inReplyToID,
+		SpoilerText: contentWarning,
+	}
+
+	// Marshal to JSON
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Create request
+	apiURL := fmt.Sprintf("%s/api/v1/statuses", instanceURL)
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, strings.NewReader(string(jsonData)))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+	req.Header.Set("Content-Type", "application/json")
+
+	// Execute request
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to post status: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("mastodon API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response to get status ID
+	var status MastodonStatus
+	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return status.ID, nil
 }

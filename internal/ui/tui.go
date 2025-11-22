@@ -38,24 +38,28 @@ const (
 	screenAuthenticated
 	screenAnonymous
 	screenFeed
+	screenCompose
 )
 
 // Model represents the TUI state
 type Model struct {
-	ctx           *AppContext
-	sshSession    ssh.Session
-	screen        screenType
-	message       string
-	input         string
-	deviceAuth    *auth.DeviceAuthResponse
-	user          *models.User
-	sessionID     string
-	publicKey     string
-	authenticated bool
-	pollingTicker *time.Ticker
-	feed          FeedModel
-	width         int
-	height        int
+	ctx            *AppContext
+	sshSession     ssh.Session
+	screen         screenType
+	message        string
+	input          string
+	deviceAuth     *auth.DeviceAuthResponse
+	user           *models.User
+	sessionID      string
+	publicKey      string
+	authenticated  bool
+	pollingTicker  *time.Ticker
+	feed           FeedModel
+	compose        ComposeModel
+	mastodonSvc    *services.MastodonService
+	width          int
+	height         int
+	returnToScreen screenType // Screen to return to after composing
 }
 
 // NewModel creates a new TUI model
@@ -68,13 +72,16 @@ func NewModel(ctx *AppContext, s ssh.Session) Model {
 	}
 
 	return Model{
-		ctx:        ctx,
-		sshSession: s,
-		screen:     screenWelcome,
-		publicKey:  publicKey,
-		feed:       NewFeedModel(),
-		width:      80, // Default width
-		height:     24, // Default height
+		ctx:            ctx,
+		sshSession:     s,
+		screen:         screenWelcome,
+		publicKey:      publicKey,
+		feed:           NewFeedModel(),
+		compose:        NewComposeModel(),
+		mastodonSvc:    services.NewMastodonService(ctx.DB),
+		width:          80, // Default width
+		height:         24, // Default height
+		returnToScreen: screenAuthenticated,
 	}
 }
 
@@ -214,6 +221,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case postStatusMsg:
+		// Handle post status request from compose screen
+		return m, executePostStatusCmd(m.ctx, m.mastodonSvc, m.user.ID, msg.content, string(msg.visibility), msg.replyToID, msg.contentWarning)
+
+	case composeCancelMsg:
+		// User cancelled compose - return to previous screen
+		m.screen = m.returnToScreen
+		return m, nil
+
+	case composeSuccessMsg:
+		// Post successful - return to previous screen
+		m.screen = m.returnToScreen
+		m.message = "Post created successfully!"
+		return m, nil
+
 	case tea.KeyMsg:
 		return m.handleKeyPress(msg)
 	}
@@ -295,6 +317,14 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.feed.err = nil
 			m.feed.timelineType = services.TimelineHome
 			return m, fetchTimelineCmd(m.ctx, m.user.ID, services.TimelineHome, 20)
+		case "p", "P":
+			// Open compose screen for new post
+			m.compose = NewComposeModel()
+			m.compose.width = m.width
+			m.compose.height = m.height
+			m.returnToScreen = screenAuthenticated
+			m.screen = screenCompose
+			return m, m.compose.Init()
 		}
 
 	case screenAnonymous:
@@ -346,8 +376,8 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.feed.loading = true
 			m.feed.timelineType = services.TimelineFederated
 			return m, fetchTimelineCmd(m.ctx, m.user.ID, services.TimelineFederated, 20)
-		case "r", "R":
-			// Retry/refresh feed
+		case "ctrl+r":
+			// Refresh feed
 			m.feed.loading = true
 			m.feed.statusMessage = "Refreshing..."
 			return m, fetchTimelineCmd(m.ctx, m.user.ID, m.feed.timelineType, 20)
@@ -381,7 +411,33 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 				return m, boostStatusCmd(m.ctx, m.user.ID, status.ID)
 			}
+		case "r", "R":
+			// Reply to selected post
+			if m.feed.selectedIndex < len(m.feed.statuses) {
+				status := m.feed.statuses[m.feed.selectedIndex]
+				// If it's a reblog, reply to the original post
+				originalStatus := &status
+				if status.Reblog != nil {
+					originalStatus = status.Reblog
+				}
+				// Create reply compose model
+				author := originalStatus.Account.Acct
+				// Strip HTML from content for context display
+				content := stripHTML(originalStatus.Content)
+				m.compose = NewReplyModel(originalStatus.ID, author, content)
+				m.compose.width = m.width
+				m.compose.height = m.height
+				m.returnToScreen = screenFeed
+				m.screen = screenCompose
+				return m, m.compose.Init()
+			}
 		}
+
+	case screenCompose:
+		// Delegate all compose screen updates to compose model
+		var cmd tea.Cmd
+		m.compose, cmd = m.compose.Update(msg)
+		return m, cmd
 	}
 
 	return m, nil
@@ -477,6 +533,24 @@ func loadUserCmd(ctx *AppContext, userID int, publicKey, deviceCode string) tea.
 	}
 }
 
+// executePostStatusCmd posts a status to Mastodon
+func executePostStatusCmd(ctx *AppContext, mastodonSvc *services.MastodonService, userID int, content, visibility, replyToID, contentWarning string) tea.Cmd {
+	return func() tea.Msg {
+		statusID, err := mastodonSvc.PostStatus(
+			context.Background(),
+			userID,
+			content,
+			visibility,
+			replyToID,
+			contentWarning,
+		)
+		return postStatusResultMsg{
+			statusID: statusID,
+			err:      err,
+		}
+	}
+}
+
 // View renders the TUI
 func (m Model) View() string {
 	switch m.screen {
@@ -492,6 +566,8 @@ func (m Model) View() string {
 		return m.renderAnonymous()
 	case screenFeed:
 		return m.renderFeed()
+	case screenCompose:
+		return m.compose.View()
 	default:
 		// Fallback to welcome screen if unknown state
 		m.screen = screenWelcome
@@ -592,6 +668,7 @@ func (m Model) renderAuthenticated() string {
 	b.WriteString(fmt.Sprintf("  Welcome, @%s\n\n", username))
 	b.WriteString("  Your SSH key has been associated with your account.\n")
 	b.WriteString("  Next time you connect, you'll be automatically logged in!\n\n")
+	b.WriteString("  [P] Compose new post\n")
 	b.WriteString("  [F] View your Mastodon feed\n")
 	b.WriteString("  [X] Logout\n")
 	b.WriteString("  [Q] Quit\n")
