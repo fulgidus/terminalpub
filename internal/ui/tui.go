@@ -54,6 +54,8 @@ type Model struct {
 	authenticated bool
 	pollingTicker *time.Ticker
 	feed          FeedModel
+	width         int
+	height        int
 }
 
 // NewModel creates a new TUI model
@@ -71,6 +73,8 @@ func NewModel(ctx *AppContext, s ssh.Session) Model {
 		screen:     screenWelcome,
 		publicKey:  publicKey,
 		feed:       NewFeedModel(),
+		width:      80, // Default width
+		height:     24, // Default height
 	}
 }
 
@@ -115,6 +119,13 @@ type tickMsg time.Time
 // Update handles messages and updates the model
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+
+	case tea.WindowSizeMsg:
+		// Update window dimensions
+		m.width = msg.Width
+		m.height = msg.Height
+		m.feed.viewportHeight = msg.Height - 10 // Reserve space for header/footer
+		return m, nil
 
 	case authenticatedMsg:
 		// User is already authenticated
@@ -488,24 +499,35 @@ func (m Model) renderWelcome() string {
 		status = m.user.Username
 	}
 
-	return fmt.Sprintf(`
-╔════════════════════════════════════════════╗
-║        Welcome to terminalpub!             ║
-║        ActivityPub for terminals           ║
-╠════════════════════════════════════════════╣
-║                                            ║
-║  Connected as: %-27s ║
-║                                            ║
-║  Press a key to continue:                  ║
-║                                            ║
-║  [L] Login with Mastodon                   ║
-║  [A] Continue anonymously                  ║
-║  [Q] Quit                                  ║
-║                                            ║
-╚════════════════════════════════════════════╝
+	width := m.width - 4
+	if width < 50 {
+		width = 50
+	}
+	if width > 80 {
+		width = 80
+	}
 
-%s
-`, status, m.message)
+	var b strings.Builder
+	b.WriteString("╔" + strings.Repeat("═", width) + "╗\n")
+	b.WriteString("║" + centerText("Welcome to terminalpub!", width) + "║\n")
+	b.WriteString("║" + centerText("ActivityPub for terminals", width) + "║\n")
+	b.WriteString("╠" + strings.Repeat("═", width) + "╣\n")
+	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
+	b.WriteString("║ " + padRight(fmt.Sprintf("Connected as: %s", status), width-2) + " ║\n")
+	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
+	b.WriteString("║ " + padRight("Press a key to continue:", width-2) + " ║\n")
+	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
+	b.WriteString("║ " + padRight("[L] Login with Mastodon", width-2) + " ║\n")
+	b.WriteString("║ " + padRight("[A] Continue anonymously", width-2) + " ║\n")
+	b.WriteString("║ " + padRight("[Q] Quit", width-2) + " ║\n")
+	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
+	b.WriteString("╚" + strings.Repeat("═", width) + "╝\n")
+
+	if m.message != "" {
+		b.WriteString("\n" + m.message + "\n")
+	}
+
+	return b.String()
 }
 
 func (m Model) renderLoginInstance() string {
@@ -576,31 +598,42 @@ func (m Model) renderAuthenticated() string {
 		username = m.user.Username
 	}
 
-	return fmt.Sprintf(`
-╔═════════════════════════════════════════════╗
-║        🎉 Successfully Logged In!           ║
-╠═════════════════════════════════════════════╣
-║                                             ║
-║  Welcome, @%-33s║
-║                                             ║
-║  Your SSH key has been associated with      ║
-║  your account. Next time you connect,       ║
-║  you'll be automatically logged in!         ║
-║                                             ║
-║  Available features:                        ║
-║  [F] View your Mastodon feed                ║
-║  • Post to the fediverse                    ║
-║  • Interact with posts (like, boost)        ║
-║  • Chat roulette                            ║
-║                                             ║
-║  [Coming Soon...]                           ║
-║                                             ║
-║  [Q] Quit                                   ║
-║                                             ║
-╚═════════════════════════════════════════════╝
+	width := m.width - 4
+	if width < 50 {
+		width = 50
+	}
+	if width > 80 {
+		width = 80
+	}
 
-%s
-`, username, m.message)
+	var b strings.Builder
+	b.WriteString("╔" + strings.Repeat("═", width) + "╗\n")
+	b.WriteString("║" + centerText("🎉 Successfully Logged In!", width) + "║\n")
+	b.WriteString("╠" + strings.Repeat("═", width) + "╣\n")
+	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
+	b.WriteString("║ " + padRight(fmt.Sprintf("Welcome, @%s", username), width-2) + " ║\n")
+	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
+	b.WriteString("║ " + padRight("Your SSH key has been associated with", width-2) + " ║\n")
+	b.WriteString("║ " + padRight("your account. Next time you connect,", width-2) + " ║\n")
+	b.WriteString("║ " + padRight("you'll be automatically logged in!", width-2) + " ║\n")
+	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
+	b.WriteString("║ " + padRight("Available features:", width-2) + " ║\n")
+	b.WriteString("║ " + padRight("[F] View your Mastodon feed", width-2) + " ║\n")
+	b.WriteString("║ " + padRight("• Post to the fediverse", width-2) + " ║\n")
+	b.WriteString("║ " + padRight("• Interact with posts (like, boost)", width-2) + " ║\n")
+	b.WriteString("║ " + padRight("• Chat roulette", width-2) + " ║\n")
+	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
+	b.WriteString("║ " + padRight("[Coming Soon...]", width-2) + " ║\n")
+	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
+	b.WriteString("║ " + padRight("[Q] Quit", width-2) + " ║\n")
+	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
+	b.WriteString("╚" + strings.Repeat("═", width) + "╝\n")
+
+	if m.message != "" {
+		b.WriteString("\n" + m.message + "\n")
+	}
+
+	return b.String()
 }
 
 func (m Model) renderAnonymous() string {

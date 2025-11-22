@@ -111,16 +111,35 @@ func (m *Model) renderFeedWithPosts() string {
 	var b strings.Builder
 	timelineName := getTimelineName(m.feed.timelineType)
 
+	// Use dynamic width (minimum 60, use terminal width - 4 for margins)
+	contentWidth := m.width - 4
+	if contentWidth < 60 {
+		contentWidth = 60
+	}
+	if contentWidth > 120 {
+		contentWidth = 120 // Max width for readability
+	}
+
 	// Header
-	b.WriteString(fmt.Sprintf(`╔════════════════════════════════════════════╗
-║       %s Timeline (%d posts)         ║
-╠════════════════════════════════════════════╣
-║                                            ║
-`, timelineName, len(m.feed.statuses)))
+	topLine := "╔" + strings.Repeat("═", contentWidth) + "╗\n"
+	titleText := fmt.Sprintf("%s Timeline (%d posts)", timelineName, len(m.feed.statuses))
+	titleLine := "║" + centerText(titleText, contentWidth) + "║\n"
+	dividerLine := "╠" + strings.Repeat("═", contentWidth) + "╣\n"
+	emptyLine := "║" + strings.Repeat(" ", contentWidth) + "║\n"
+
+	b.WriteString(topLine)
+	b.WriteString(titleLine)
+	b.WriteString(dividerLine)
+	b.WriteString(emptyLine)
 
 	// Calculate which posts to show (viewport)
+	postsPerPage := (m.height - 12) / 8 // Estimate ~8 lines per post
+	if postsPerPage < 3 {
+		postsPerPage = 3
+	}
+
 	startIdx := m.feed.scrollOffset
-	endIdx := startIdx + 5 // Show 5 posts at a time
+	endIdx := startIdx + postsPerPage
 	if endIdx > len(m.feed.statuses) {
 		endIdx = len(m.feed.statuses)
 	}
@@ -130,10 +149,10 @@ func (m *Model) renderFeedWithPosts() string {
 		status := m.feed.statuses[i]
 		isSelected := i == m.feed.selectedIndex
 
-		// Render post
-		b.WriteString(m.renderPost(status, isSelected))
-		b.WriteString("║                                            ║\n")
-		b.WriteString("║────────────────────────────────────────────║\n")
+		// Render post with dynamic width
+		b.WriteString(m.renderPostDynamic(status, isSelected, contentWidth))
+		b.WriteString(emptyLine)
+		b.WriteString("║" + strings.Repeat("─", contentWidth) + "║\n")
 	}
 
 	// Footer with controls
@@ -153,20 +172,29 @@ func (m *Model) renderFeedWithPosts() string {
 		moreHint = "[M] Load more  "
 	}
 
-	b.WriteString(fmt.Sprintf(`║                                            ║
-║  ↑/↓ Navigate  [H]ome [L]ocal [F]ederated ║
-║  [X] Like  [S] Boost  [R] Refresh  %s║
-║  Post %d/%d  [B]ack  [Q]uit               ║
-║                                            ║
-║  Status: %-34s ║
-╚════════════════════════════════════════════╝
-`, truncate(moreHint, 8), m.feed.selectedIndex+1, len(m.feed.statuses), truncate(statusMsg, 34)))
+	b.WriteString(emptyLine)
+	controlLine1 := "↑/↓ Navigate  [H]ome [L]ocal [F]ederated"
+	controlLine2 := fmt.Sprintf("[X] Like  [S] Boost  [R] Refresh  %s", moreHint)
+	controlLine3 := fmt.Sprintf("Post %d/%d  [B]ack  [Q]uit", m.feed.selectedIndex+1, len(m.feed.statuses))
+	statusLine := fmt.Sprintf("Status: %s", statusMsg)
+
+	b.WriteString("║ " + padRight(controlLine1, contentWidth-2) + " ║\n")
+	b.WriteString("║ " + padRight(controlLine2, contentWidth-2) + " ║\n")
+	b.WriteString("║ " + padRight(controlLine3, contentWidth-2) + " ║\n")
+	b.WriteString(emptyLine)
+	b.WriteString("║ " + padRight(statusLine, contentWidth-2) + " ║\n")
+	b.WriteString("╚" + strings.Repeat("═", contentWidth) + "╝\n")
 
 	return b.String()
 }
 
-// renderPost renders a single Mastodon post
+// renderPost renders a single Mastodon post (old fixed-width version)
 func (m *Model) renderPost(status services.MastodonStatus, selected bool) string {
+	return m.renderPostDynamic(status, selected, 44) // Default 44 for compatibility
+}
+
+// renderPostDynamic renders a single Mastodon post with dynamic width
+func (m *Model) renderPostDynamic(status services.MastodonStatus, selected bool, width int) string {
 	// Handle boost/reblog
 	originalStatus := status
 	if status.Reblog != nil {
@@ -183,9 +211,6 @@ func (m *Model) renderPost(status services.MastodonStatus, selected bool) string
 	// Strip HTML from content
 	content := stripHTML(originalStatus.Content)
 
-	// Truncate content to fit in terminal (max 40 chars per line, 3 lines)
-	content = truncateContent(content, 120)
-
 	// Format metadata
 	likes := originalStatus.FavouritesCount
 	boosts := originalStatus.ReblogsCount
@@ -200,24 +225,38 @@ func (m *Model) renderPost(status services.MastodonStatus, selected bool) string
 	}
 
 	var b strings.Builder
+	contentWidth := width - 4 // Account for margins
 
 	// Show if it's a boost
 	if status.Reblog != nil {
-		b.WriteString(fmt.Sprintf("║ %s🔄 %s boosted:                      ║\n", style, status.Account.DisplayName))
+		boostText := fmt.Sprintf("%s🔄 %s boosted:", style, truncate(status.Account.DisplayName, 20))
+		b.WriteString("║ " + padRight(boostText, width-2) + " ║\n")
 	}
 
-	b.WriteString(fmt.Sprintf("║ %s%-30s ║\n", style, truncate(author, 28)))
-	b.WriteString(fmt.Sprintf("║   %s                              ║\n", truncate(handle, 40)))
-	b.WriteString("║                                            ║\n")
+	// Author and handle
+	authorText := fmt.Sprintf("%s%s", style, truncate(author, contentWidth-3))
+	b.WriteString("║ " + padRight(authorText, width-2) + " ║\n")
 
-	// Content (word-wrapped)
-	lines := wrapText(content, 40)
-	for _, line := range lines {
-		b.WriteString(fmt.Sprintf("║   %-40s ║\n", line))
+	handleText := fmt.Sprintf("  %s", truncate(handle, contentWidth-2))
+	b.WriteString("║ " + padRight(handleText, width-2) + " ║\n")
+	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
+
+	// Content (word-wrapped to dynamic width)
+	lines := wrapText(content, contentWidth-2)
+	maxContentLines := 5 // Show up to 5 lines of content
+	for i, line := range lines {
+		if i >= maxContentLines {
+			b.WriteString("║ " + padRight("  ...", width-2) + " ║\n")
+			break
+		}
+		b.WriteString("║ " + padRight("  "+line, width-2) + " ║\n")
 	}
 
-	b.WriteString("║                                            ║\n")
-	b.WriteString(fmt.Sprintf("║   ❤ %-4d  🔄 %-4d  💬 %-4d              ║\n", likes, boosts, replies))
+	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
+
+	// Interaction stats
+	statsText := fmt.Sprintf("  ❤ %-4d  🔄 %-4d  💬 %-4d", likes, boosts, replies)
+	b.WriteString("║ " + padRight(statsText, width-2) + " ║\n")
 
 	return b.String()
 }
@@ -390,6 +429,24 @@ type likeMsg struct {
 // boostMsg is returned when a status is boosted
 type boostMsg struct {
 	err error
+}
+
+// centerText centers text within a given width
+func centerText(text string, width int) string {
+	textLen := len(text)
+	if textLen >= width {
+		return text[:width]
+	}
+	padding := (width - textLen) / 2
+	return strings.Repeat(" ", padding) + text + strings.Repeat(" ", width-textLen-padding)
+}
+
+// padRight pads text to the right
+func padRight(text string, width int) string {
+	if len(text) >= width {
+		return text[:width]
+	}
+	return text + strings.Repeat(" ", width-len(text))
 }
 
 // Lipgloss styles
