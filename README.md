@@ -7,9 +7,9 @@
 
 A terminal-first federated social network powered by SSH and ActivityPub. Connect to the fediverse without leaving your shell.
 
-```bash
-ssh terminalpub.com
-```
+   ```bash
+   ssh terminalpub.com -p 2223
+   ```
 
 ## Features
 
@@ -45,7 +45,7 @@ make run
 
 Connect via SSH:
 ```bash
-ssh localhost -p 2222
+ssh localhost -p 2223
 ```
 
 ## User Experience
@@ -194,9 +194,9 @@ make migrate-up
 # Run server in development mode
 make dev
 
-# In another terminal, connect via SSH
-ssh localhost -p 2222
-```
+   # In another terminal, connect via SSH
+   ssh localhost -p 2223
+   ```
 
 ### Available Make Commands
 
@@ -341,6 +341,6 @@ Inspired by the need for a terminal-native way to interact with the fediverse. B
 
 ---
 
-**Status**: 🚧 In active development
+**Status**: ✅ SSH server deployed and running!
 
-**Connect**: `ssh terminalpub.com` (coming soon)
+**Connect**: `ssh terminalpub.com -p 2223` (now live at 51.91.97.241)

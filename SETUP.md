@@ -32,7 +32,7 @@
 
 5. **Connect via SSH**
    ```bash
-   ssh localhost -p 2222
+   ssh localhost -p 2223
    ```
 
 ## GitHub Secrets Configuration
