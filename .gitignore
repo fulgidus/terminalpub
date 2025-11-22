@@ -49,3 +49,9 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+
+# SSH Keys
+.ssh/
+*.pem
+*.key
+!scripts/*.key  # Allow systemd key files if any
