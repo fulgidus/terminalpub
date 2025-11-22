@@ -156,13 +156,26 @@ func setupHTTPServer(cfg *config.Config, database *db.DB) *http.Server {
 		})
 	}
 
-	// Placeholder routes for future ActivityPub
-	r.Get("/.well-known/webfinger", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("WebFinger - Coming in Phase 3"))
-	})
-	r.Get("/users/{username}", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("ActivityPub Actor - Coming in Phase 3"))
-	})
+	// ActivityPub routes
+	if database != nil {
+		apHandler := handlers.NewActivityPubHandler(database.Postgres, cfg)
+		r.Get("/.well-known/webfinger", apHandler.WebFinger)
+		r.Get("/users/{username}", apHandler.Actor)
+		r.Post("/users/{username}/inbox", apHandler.Inbox)
+		r.Get("/users/{username}/inbox", func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "Inbox is write-only", http.StatusMethodNotAllowed)
+		})
+		r.Get("/users/{username}/outbox", apHandler.Outbox)
+		r.Get("/users/{username}/followers", apHandler.Followers)
+		r.Get("/users/{username}/following", apHandler.Following)
+	} else {
+		r.Get("/.well-known/webfinger", func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte("WebFinger - Database not available"))
+		})
+		r.Get("/users/{username}", func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte("ActivityPub Actor - Database not available"))
+		})
+	}
 
 	addr := fmt.Sprintf(":%s", cfg.Server.HTTPPort)
 	return &http.Server{

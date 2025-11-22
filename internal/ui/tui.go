@@ -120,8 +120,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case deviceCodeMsg:
 		if msg.err != nil {
-			m.message = fmt.Sprintf("Error: %v", msg.err)
-			m.screen = screenLogin
+			m.message = fmt.Sprintf("Error: %v\n\nPress [Esc] to go back", msg.err)
+			m.screen = screenLoginInstance
 			return m, nil
 		}
 		m.deviceAuth = msg.auth
@@ -163,6 +163,11 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		case "l", "L":
+			// Check if database is available before allowing login
+			if m.ctx == nil || m.ctx.DeviceFlowService == nil {
+				m.message = "Login unavailable: Database not connected"
+				return m, nil
+			}
 			m.screen = screenLoginInstance
 			m.input = ""
 			m.message = ""
@@ -175,6 +180,11 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "enter":
 			if m.input != "" {
+				// Check if AppContext is available
+				if m.ctx == nil || m.ctx.DeviceFlowService == nil {
+					m.message = "Error: Database connection not available\n\nPress [Esc] to go back"
+					return m, nil
+				}
 				instance := strings.TrimSpace(m.input)
 				m.message = "Connecting to Mastodon..."
 				return m, initiateDeviceFlowCmd(m.ctx, instance, m.sshSession.User())
@@ -182,6 +192,7 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "esc", "ctrl+c":
 			m.screen = screenWelcome
 			m.input = ""
+			m.message = ""
 		case "backspace":
 			if len(m.input) > 0 {
 				m.input = m.input[:len(m.input)-1]
@@ -222,12 +233,23 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // initiateDeviceFlowCmd starts the OAuth Device Flow
 func initiateDeviceFlowCmd(ctx *AppContext, instance, sessionID string) tea.Cmd {
 	return func() tea.Msg {
+		// Add timeout to prevent hanging
+		bgCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
 		auth, err := ctx.DeviceFlowService.InitiateDeviceFlow(
-			context.Background(),
+			bgCtx,
 			instance,
 			sessionID,
 		)
-		return deviceCodeMsg{auth: auth, err: err}
+		if err != nil {
+			// Wrap error with more context
+			return deviceCodeMsg{
+				auth: nil,
+				err:  fmt.Errorf("failed to connect to %s: %w", instance, err),
+			}
+		}
+		return deviceCodeMsg{auth: auth, err: nil}
 	}
 }
 
@@ -304,7 +326,9 @@ func (m Model) View() string {
 	case screenAnonymous:
 		return m.renderAnonymous()
 	default:
-		return "Unknown screen"
+		// Fallback to welcome screen if unknown state
+		m.screen = screenWelcome
+		return m.renderWelcome()
 	}
 }
 

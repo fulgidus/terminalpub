@@ -6,6 +6,9 @@
 *.so
 *.dylib
 terminalpub
+worker
+server
+migrate
 terminalpub-*
 
 # Test binary, built with `go test -c`
