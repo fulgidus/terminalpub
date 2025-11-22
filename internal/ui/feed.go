@@ -58,52 +58,48 @@ func (m *Model) renderFeed() string {
 // renderLoadingFeed shows a loading spinner
 func (m *Model) renderLoadingFeed() string {
 	timelineName := getTimelineName(m.feed.timelineType)
-	return fmt.Sprintf(`
-╔════════════════════════════════════════════╗
-║          %s Timeline                    ║
-╠════════════════════════════════════════════╣
-║                                            ║
-║                Loading...                  ║
-║                                            ║
-║  Fetching posts from Mastodon...          ║
-║                                            ║
-╚════════════════════════════════════════════╝
-`, timelineName)
+	var b strings.Builder
+
+	b.WriteString(strings.Repeat("─", m.width) + "\n")
+	b.WriteString(fmt.Sprintf("  %s Timeline\n", timelineName))
+	b.WriteString(strings.Repeat("─", m.width) + "\n\n")
+	b.WriteString("  Loading...\n")
+	b.WriteString("  Fetching posts from Mastodon...\n\n")
+	b.WriteString(strings.Repeat("─", m.width) + "\n")
+
+	return b.String()
 }
 
 // renderFeedError shows an error message
 func (m *Model) renderFeedError() string {
-	return fmt.Sprintf(`
-╔════════════════════════════════════════════╗
-║              Feed Error                    ║
-╠════════════════════════════════════════════╣
-║                                            ║
-║  Failed to load timeline:                  ║
-║  %s
-║                                            ║
-║  [R] Retry  [B] Back  [Q] Quit             ║
-║                                            ║
-╚════════════════════════════════════════════╝
-`, m.feed.err.Error())
+	var b strings.Builder
+
+	b.WriteString(strings.Repeat("─", m.width) + "\n")
+	b.WriteString("  Feed Error\n")
+	b.WriteString(strings.Repeat("─", m.width) + "\n\n")
+	b.WriteString("  Failed to load timeline:\n")
+	b.WriteString(fmt.Sprintf("  %s\n\n", m.feed.err.Error()))
+	b.WriteString("  [R] Retry  [B] Back  [Q] Quit\n\n")
+	b.WriteString(strings.Repeat("─", m.width) + "\n")
+
+	return b.String()
 }
 
 // renderEmptyFeed shows when no posts are available
 func (m *Model) renderEmptyFeed() string {
 	timelineName := getTimelineName(m.feed.timelineType)
-	return fmt.Sprintf(`
-╔════════════════════════════════════════════╗
-║          %s Timeline                    ║
-╠════════════════════════════════════════════╣
-║                                            ║
-║  No posts to display                       ║
-║                                            ║
-║  Try switching to a different timeline:    ║
-║  [H] Home  [L] Local  [F] Federated        ║
-║                                            ║
-║  [B] Back  [Q] Quit                        ║
-║                                            ║
-╚════════════════════════════════════════════╝
-`, timelineName)
+	var b strings.Builder
+
+	b.WriteString(strings.Repeat("─", m.width) + "\n")
+	b.WriteString(fmt.Sprintf("  %s Timeline\n", timelineName))
+	b.WriteString(strings.Repeat("─", m.width) + "\n\n")
+	b.WriteString("  No posts to display\n\n")
+	b.WriteString("  Try switching to a different timeline:\n")
+	b.WriteString("  [H] Home  [L] Local  [F] Federated\n\n")
+	b.WriteString("  [B] Back  [Q] Quit\n\n")
+	b.WriteString(strings.Repeat("─", m.width) + "\n")
+
+	return b.String()
 }
 
 // renderFeedWithPosts shows the timeline with posts
@@ -111,29 +107,14 @@ func (m *Model) renderFeedWithPosts() string {
 	var b strings.Builder
 	timelineName := getTimelineName(m.feed.timelineType)
 
-	// Use dynamic width (minimum 60, use terminal width - 4 for margins)
-	contentWidth := m.width - 4
-	if contentWidth < 60 {
-		contentWidth = 60
-	}
-	if contentWidth > 120 {
-		contentWidth = 120 // Max width for readability
-	}
-
-	// Header
-	topLine := "╔" + strings.Repeat("═", contentWidth) + "╗\n"
+	// Top line with title
 	titleText := fmt.Sprintf("%s Timeline (%d posts)", timelineName, len(m.feed.statuses))
-	titleLine := "║" + centerText(titleText, contentWidth) + "║\n"
-	dividerLine := "╠" + strings.Repeat("═", contentWidth) + "╣\n"
-	emptyLine := "║" + strings.Repeat(" ", contentWidth) + "║\n"
-
-	b.WriteString(topLine)
-	b.WriteString(titleLine)
-	b.WriteString(dividerLine)
-	b.WriteString(emptyLine)
+	b.WriteString(strings.Repeat("─", m.width) + "\n")
+	b.WriteString("  " + titleText + "\n")
+	b.WriteString(strings.Repeat("─", m.width) + "\n\n")
 
 	// Calculate which posts to show (viewport)
-	postsPerPage := (m.height - 12) / 8 // Estimate ~8 lines per post
+	postsPerPage := (m.height - 8) / 6 // Estimate ~6 lines per post
 	if postsPerPage < 3 {
 		postsPerPage = 3
 	}
@@ -149,17 +130,16 @@ func (m *Model) renderFeedWithPosts() string {
 		status := m.feed.statuses[i]
 		isSelected := i == m.feed.selectedIndex
 
-		// Render post with dynamic width
-		b.WriteString(m.renderPostDynamic(status, isSelected, contentWidth))
-		b.WriteString(emptyLine)
-		b.WriteString("║" + strings.Repeat("─", contentWidth) + "║\n")
+		// Render post with full width
+		b.WriteString(m.renderPostMinimal(status, isSelected))
+		b.WriteString("\n")
 	}
 
 	// Footer with controls
 	statusMsg := m.feed.statusMessage
 	if statusMsg == "" {
 		if m.feed.loadingMore {
-			statusMsg = "Loading more posts..."
+			statusMsg = "Loading more..."
 		} else if !m.feed.hasMore {
 			statusMsg = "No more posts"
 		} else {
@@ -167,23 +147,17 @@ func (m *Model) renderFeedWithPosts() string {
 		}
 	}
 
-	moreHint := ""
+	b.WriteString(strings.Repeat("─", m.width) + "\n")
+
+	// Controls
+	b.WriteString("  ↑/↓ Navigate  [H]ome [L]ocal [F]ederated  ")
 	if m.feed.hasMore && !m.feed.loadingMore {
-		moreHint = "[M] Load more  "
+		b.WriteString("[M] Load more  ")
 	}
-
-	b.WriteString(emptyLine)
-	controlLine1 := "↑/↓ Navigate  [H]ome [L]ocal [F]ederated"
-	controlLine2 := fmt.Sprintf("[X] Like  [S] Boost  [R] Refresh  %s", moreHint)
-	controlLine3 := fmt.Sprintf("Post %d/%d  [B]ack  [Q]uit", m.feed.selectedIndex+1, len(m.feed.statuses))
-	statusLine := fmt.Sprintf("Status: %s", statusMsg)
-
-	b.WriteString("║ " + padRight(controlLine1, contentWidth-2) + " ║\n")
-	b.WriteString("║ " + padRight(controlLine2, contentWidth-2) + " ║\n")
-	b.WriteString("║ " + padRight(controlLine3, contentWidth-2) + " ║\n")
-	b.WriteString(emptyLine)
-	b.WriteString("║ " + padRight(statusLine, contentWidth-2) + " ║\n")
-	b.WriteString("╚" + strings.Repeat("═", contentWidth) + "╝\n")
+	b.WriteString("\n")
+	b.WriteString("  [X] Like  [S] Boost  [R] Refresh  [B]ack  [Q]uit\n")
+	b.WriteString(fmt.Sprintf("  Post %d/%d  •  %s\n", m.feed.selectedIndex+1, len(m.feed.statuses), statusMsg))
+	b.WriteString(strings.Repeat("─", m.width) + "\n")
 
 	return b.String()
 }
@@ -191,6 +165,66 @@ func (m *Model) renderFeedWithPosts() string {
 // renderPost renders a single Mastodon post (old fixed-width version)
 func (m *Model) renderPost(status services.MastodonStatus, selected bool) string {
 	return m.renderPostDynamic(status, selected, 44) // Default 44 for compatibility
+}
+
+// renderPostMinimal renders a post with minimal UI (no borders)
+func (m *Model) renderPostMinimal(status services.MastodonStatus, selected bool) string {
+	// Handle boost/reblog
+	originalStatus := status
+	if status.Reblog != nil {
+		originalStatus = *status.Reblog
+	}
+
+	// Format author
+	author := originalStatus.Account.DisplayName
+	if author == "" {
+		author = originalStatus.Account.Username
+	}
+	handle := fmt.Sprintf("@%s", originalStatus.Account.Acct)
+
+	// Strip HTML from content
+	content := stripHTML(originalStatus.Content)
+
+	// Format metadata
+	likes := originalStatus.FavouritesCount
+	boosts := originalStatus.ReblogsCount
+	replies := originalStatus.RepliesCount
+
+	var b strings.Builder
+
+	// Selection indicator
+	indicator := "  "
+	if selected {
+		indicator = "► "
+	}
+
+	// Show if it's a boost
+	if status.Reblog != nil {
+		b.WriteString(fmt.Sprintf("%s🔄 %s boosted\n", indicator, truncate(status.Account.DisplayName, 40)))
+	}
+
+	// Author and handle
+	b.WriteString(fmt.Sprintf("%s%s %s\n", indicator, author, handle))
+
+	// Content (word-wrapped to terminal width - 4 for margins)
+	contentWidth := m.width - 4
+	if contentWidth < 60 {
+		contentWidth = 60
+	}
+	lines := wrapText(content, contentWidth)
+	maxContentLines := 4 // Show up to 4 lines of content
+	for i, line := range lines {
+		if i >= maxContentLines {
+			b.WriteString("  ...\n")
+			break
+		}
+		b.WriteString("  " + line + "\n")
+	}
+
+	// Interaction stats
+	b.WriteString(fmt.Sprintf("  ❤ %d  🔄 %d  💬 %d\n", likes, boosts, replies))
+
+	return b.String()
 }
 
 // renderPostDynamic renders a single Mastodon post with dynamic width

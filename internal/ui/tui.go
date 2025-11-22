@@ -282,6 +282,13 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "x", "X":
+			// Logout - reset to welcome screen
+			m.authenticated = false
+			m.user = nil
+			m.screen = screenWelcome
+			m.message = "Logged out successfully"
+			return m, nil
 		case "f", "F":
 			// Open feed screen
 			m.screen = screenFeed
@@ -499,59 +506,47 @@ func (m Model) renderWelcome() string {
 		status = m.user.Username
 	}
 
-	width := m.width - 4
-	if width < 50 {
-		width = 50
-	}
-	if width > 80 {
-		width = 80
-	}
-
 	var b strings.Builder
-	b.WriteString("╔" + strings.Repeat("═", width) + "╗\n")
-	b.WriteString("║" + centerText("Welcome to terminalpub!", width) + "║\n")
-	b.WriteString("║" + centerText("ActivityPub for terminals", width) + "║\n")
-	b.WriteString("╠" + strings.Repeat("═", width) + "╣\n")
-	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
-	b.WriteString("║ " + padRight(fmt.Sprintf("Connected as: %s", status), width-2) + " ║\n")
-	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
-	b.WriteString("║ " + padRight("Press a key to continue:", width-2) + " ║\n")
-	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
-	b.WriteString("║ " + padRight("[L] Login with Mastodon", width-2) + " ║\n")
-	b.WriteString("║ " + padRight("[A] Continue anonymously", width-2) + " ║\n")
-	b.WriteString("║ " + padRight("[Q] Quit", width-2) + " ║\n")
-	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
-	b.WriteString("╚" + strings.Repeat("═", width) + "╝\n")
+
+	// Top line
+	b.WriteString(strings.Repeat("─", m.width) + "\n")
+	b.WriteString("\n")
+
+	// Content
+	b.WriteString("  terminalpub - ActivityPub for terminals\n\n")
+	b.WriteString(fmt.Sprintf("  Connected as: %s\n\n", status))
+	b.WriteString("  [L] Login with Mastodon\n")
+	b.WriteString("  [A] Continue anonymously\n")
+	b.WriteString("  [Q] Quit\n")
+	b.WriteString("\n")
 
 	if m.message != "" {
-		b.WriteString("\n" + m.message + "\n")
+		b.WriteString("  " + m.message + "\n\n")
 	}
+
+	// Bottom line
+	b.WriteString(strings.Repeat("─", m.width) + "\n")
 
 	return b.String()
 }
 
 func (m Model) renderLoginInstance() string {
-	return fmt.Sprintf(`
-╔════════════════════════════════════════════╗
-║        Login with Mastodon                 ║
-╠════════════════════════════════════════════╣
-║                                            ║
-║  Enter your Mastodon instance:            ║
-║                                            ║
-║  > %-40s ║
-║                                            ║
-║  Examples:                                 ║
-║  • mastodon.social                         ║
-║  • mas.to                                  ║
-║  • fosstodon.org                           ║
-║                                            ║
-║  Press [Enter] to continue                 ║
-║  Press [Esc] to go back                    ║
-║                                            ║
-╚════════════════════════════════════════════╝
+	var b strings.Builder
 
-%s
-`, m.input, m.message)
+	b.WriteString(strings.Repeat("─", m.width) + "\n\n")
+	b.WriteString("  Login with Mastodon\n\n")
+	b.WriteString("  Enter your Mastodon instance:\n")
+	b.WriteString(fmt.Sprintf("  > %s\n\n", m.input))
+	b.WriteString("  Examples: mastodon.social, mas.to, fosstodon.org\n\n")
+	b.WriteString("  Press [Enter] to continue  [Esc] to go back\n\n")
+
+	if m.message != "" {
+		b.WriteString("  " + m.message + "\n\n")
+	}
+
+	b.WriteString(strings.Repeat("─", m.width) + "\n")
+
+	return b.String()
 }
 
 func (m Model) renderLoginWaiting() string {
@@ -564,32 +559,22 @@ func (m Model) renderLoginWaiting() string {
 	minutes := int(timeRemaining.Minutes())
 	seconds := int(timeRemaining.Seconds()) % 60
 
-	return fmt.Sprintf(`
-╔════════════════════════════════════════════╗
-║        Waiting for Authorization           ║
-╠════════════════════════════════════════════╣
-║                                            ║
-║  1. Open your browser and visit:           ║
-║                                            ║
-║     http://51.91.97.241/device             ║
-║                                            ║
-║  2. Enter this code:                       ║
-║                                            ║
-║     ┌─────────────┐                        ║
-║     │  %s  │                               ║
-║     └─────────────┘                        ║
-║                                            ║
-║  3. Authorize terminalpub access           ║
-║                                            ║
-║  Waiting for authorization...              ║
-║  ⏱  Code expires in: %02d:%02d            ║
-║                                            ║
-║  [Esc] Cancel                              ║
-║                                            ║
-╚════════════════════════════════════════════╝
+	var b strings.Builder
 
-Polling for authorization every 5 seconds...
-`, m.deviceAuth.UserCode, minutes, seconds)
+	b.WriteString(strings.Repeat("─", m.width) + "\n\n")
+	b.WriteString("  Waiting for Authorization\n\n")
+	b.WriteString("  1. Open your browser and visit:\n")
+	b.WriteString("     http://51.91.97.241/device\n\n")
+	b.WriteString("  2. Enter this code:\n")
+	b.WriteString(fmt.Sprintf("     %s\n\n", m.deviceAuth.UserCode))
+	b.WriteString("  3. Authorize terminalpub access\n\n")
+	b.WriteString("  Waiting for authorization...\n")
+	b.WriteString(fmt.Sprintf("  Code expires in: %02d:%02d\n\n", minutes, seconds))
+	b.WriteString("  [Esc] Cancel\n\n")
+	b.WriteString(strings.Repeat("─", m.width) + "\n")
+	b.WriteString("  Polling every 5 seconds...\n")
+
+	return b.String()
 }
 
 func (m Model) renderAuthenticated() string {
@@ -598,70 +583,48 @@ func (m Model) renderAuthenticated() string {
 		username = m.user.Username
 	}
 
-	width := m.width - 4
-	if width < 50 {
-		width = 50
-	}
-	if width > 80 {
-		width = 80
-	}
-
 	var b strings.Builder
-	b.WriteString("╔" + strings.Repeat("═", width) + "╗\n")
-	b.WriteString("║" + centerText("🎉 Successfully Logged In!", width) + "║\n")
-	b.WriteString("╠" + strings.Repeat("═", width) + "╣\n")
-	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
-	b.WriteString("║ " + padRight(fmt.Sprintf("Welcome, @%s", username), width-2) + " ║\n")
-	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
-	b.WriteString("║ " + padRight("Your SSH key has been associated with", width-2) + " ║\n")
-	b.WriteString("║ " + padRight("your account. Next time you connect,", width-2) + " ║\n")
-	b.WriteString("║ " + padRight("you'll be automatically logged in!", width-2) + " ║\n")
-	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
-	b.WriteString("║ " + padRight("Available features:", width-2) + " ║\n")
-	b.WriteString("║ " + padRight("[F] View your Mastodon feed", width-2) + " ║\n")
-	b.WriteString("║ " + padRight("• Post to the fediverse", width-2) + " ║\n")
-	b.WriteString("║ " + padRight("• Interact with posts (like, boost)", width-2) + " ║\n")
-	b.WriteString("║ " + padRight("• Chat roulette", width-2) + " ║\n")
-	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
-	b.WriteString("║ " + padRight("[Coming Soon...]", width-2) + " ║\n")
-	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
-	b.WriteString("║ " + padRight("[Q] Quit", width-2) + " ║\n")
-	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
-	b.WriteString("╚" + strings.Repeat("═", width) + "╝\n")
+
+	// Top line
+	b.WriteString(strings.Repeat("─", m.width) + "\n")
+	b.WriteString("\n")
+
+	// Content
+	b.WriteString(fmt.Sprintf("  Welcome, @%s\n\n", username))
+	b.WriteString("  Your SSH key has been associated with your account.\n")
+	b.WriteString("  Next time you connect, you'll be automatically logged in!\n\n")
+	b.WriteString("  [F] View your Mastodon feed\n")
+	b.WriteString("  [X] Logout\n")
+	b.WriteString("  [Q] Quit\n")
+	b.WriteString("\n")
 
 	if m.message != "" {
-		b.WriteString("\n" + m.message + "\n")
+		b.WriteString("  " + m.message + "\n\n")
 	}
+
+	// Bottom line
+	b.WriteString(strings.Repeat("─", m.width) + "\n")
 
 	return b.String()
 }
 
 func (m Model) renderAnonymous() string {
-	return fmt.Sprintf(`
-╔════════════════════════════════════════════╗
-║           Anonymous Mode                   ║
-╠════════════════════════════════════════════╣
-║                                            ║
-║  You're browsing as: anonymous             ║
-║                                            ║
-║  Available features:                       ║
-║  • View public feed                        ║
-║  • Chat roulette                           ║
-║  • Browse hashtags                         ║
-║                                            ║
-║  [Coming in Phase 4+]                      ║
-║                                            ║
-║  Commands:                                 ║
-║  [B] Back to menu                          ║
-║  [Q] Quit                                  ║
-║                                            ║
-╚════════════════════════════════════════════╝
+	var b strings.Builder
 
-%s
+	b.WriteString(strings.Repeat("─", m.width) + "\n\n")
+	b.WriteString("  Anonymous Mode\n\n")
+	b.WriteString("  You're browsing as: anonymous\n\n")
+	b.WriteString("  Available features:\n")
+	b.WriteString("  • View public feed\n")
+	b.WriteString("  • Browse hashtags\n")
+	b.WriteString("  [Coming soon...]\n\n")
+	b.WriteString("  [B] Back to menu  [Q] Quit\n\n")
 
-🚧 This is a work in progress!
-Phase 1: Infrastructure ✅
-Phase 2: Authentication ✅ (In Progress)
-Phase 3: ActivityPub Integration
-`, m.message)
+	if m.message != "" {
+		b.WriteString("  " + m.message + "\n\n")
+	}
+
+	b.WriteString(strings.Repeat("─", m.width) + "\n")
+
+	return b.String()
 }
