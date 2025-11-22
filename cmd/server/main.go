@@ -58,6 +58,11 @@ func main() {
 	sshServer, err := wish.NewServer(
 		wish.WithAddress(fmt.Sprintf("0.0.0.0:%s", cfg.Server.SSHPort)),
 		wish.WithHostKeyPath(".ssh/term_ed25519"),
+		wish.WithPublicKeyAuth(func(ctx ssh.Context, key ssh.PublicKey) bool {
+			// Accept all public keys - we don't validate them here
+			// Authentication is done via Mastodon OAuth after connection
+			return true
+		}),
 		wish.WithMiddleware(
 			bubbletea.Middleware(teaHandler),
 			logging.Middleware(),
