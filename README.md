@@ -102,14 +102,64 @@ Mastodon instance: mastodon.social
 ╔════════════════════════════════╗
 ║          Main Menu             ║
 ╠════════════════════════════════╣
-║  [F] Feed (156 new)            ║
-║  [P] Post                      ║
-║  [C] Chat Roulette             ║
-║  [N] Notifications (12)        ║
-║  [S] Search                    ║
+║  [F] View Feed                 ║
+║  [P] Post (Coming Soon)        ║
+║  [C] Chat Roulette (Coming)    ║
 ║  [Q] Quit                      ║
 ╚════════════════════════════════╝
 ```
+
+### Feed Navigation (Phase 3)
+
+Once authenticated, press **[F]** to view your Mastodon feed:
+
+```
+╔════════════════════════════════════════════╗
+║          Home Timeline (20 posts)          ║
+╠════════════════════════════════════════════╣
+║                                            ║
+║ ► Alice Johnson                            ║
+║   @alice@mastodon.social                   ║
+║                                            ║
+║   Just deployed my new SSH-based social    ║
+║   network! Check it out at terminalpub.com ║
+║                                            ║
+║   ❤ 42    🔄 15    💬 8                    ║
+║────────────────────────────────────────────║
+║                                            ║
+║   Bob Williams                             ║
+║   @bob@fosstodon.org                       ║
+║                                            ║
+║   Terminal UIs are making a comeback!      ║
+║   Love the retro aesthetic 🎨              ║
+║                                            ║
+║   ❤ 128   🔄 34    💬 22                   ║
+║────────────────────────────────────────────║
+║                                            ║
+║  ↑/↓ Navigate  [H]ome [L]ocal [F]ederated ║
+║  [X] Like  [S] Boost  [R] Refresh          ║
+║  Post 1/20  [B]ack  [Q]uit                 ║
+║                                            ║
+║  Status: Ready                             ║
+╚════════════════════════════════════════════╝
+```
+
+**Feed Controls:**
+- **↑/↓ or K/J** - Navigate between posts
+- **H** - Switch to Home timeline (following only)
+- **L** - Switch to Local timeline (instance posts)
+- **F** - Switch to Federated timeline (all public posts)
+- **X** - Like/favourite the selected post
+- **S** - Boost/reblog the selected post
+- **R** - Refresh feed
+- **B** - Back to main menu
+- **Q** - Quit
+
+The feed shows 5 posts at a time with automatic scrolling. Posts display:
+- Author name and handle
+- Post content (word-wrapped)
+- Interaction counts (likes, boosts, replies)
+- Selection indicator (►) for the current post
 
 ## Architecture
 

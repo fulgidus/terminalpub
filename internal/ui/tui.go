@@ -11,6 +11,7 @@ import (
 	"github.com/fulgidus/terminalpub/internal/auth"
 	"github.com/fulgidus/terminalpub/internal/config"
 	"github.com/fulgidus/terminalpub/internal/models"
+	"github.com/fulgidus/terminalpub/internal/services"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	gossh "golang.org/x/crypto/ssh"
@@ -36,6 +37,7 @@ const (
 	screenLoginWaiting
 	screenAuthenticated
 	screenAnonymous
+	screenFeed
 )
 
 // Model represents the TUI state
@@ -51,6 +53,7 @@ type Model struct {
 	publicKey     string
 	authenticated bool
 	pollingTicker *time.Ticker
+	feed          FeedModel
 }
 
 // NewModel creates a new TUI model
@@ -67,6 +70,7 @@ func NewModel(ctx *AppContext, s ssh.Session) Model {
 		sshSession: s,
 		screen:     screenWelcome,
 		publicKey:  publicKey,
+		feed:       NewFeedModel(),
 	}
 }
 
@@ -150,6 +154,38 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case timelineMsg:
+		// Timeline fetched
+		m.feed.loading = false
+		if msg.err != nil {
+			m.feed.err = msg.err
+		} else {
+			m.feed.statuses = msg.statuses
+			m.feed.timelineType = msg.timelineType
+			m.feed.selectedIndex = 0
+			m.feed.scrollOffset = 0
+			m.feed.err = nil
+		}
+		return m, nil
+
+	case likeMsg:
+		// Status liked/favourited
+		if msg.err != nil {
+			m.feed.statusMessage = fmt.Sprintf("Error: %v", msg.err)
+		} else {
+			m.feed.statusMessage = "Post liked!"
+		}
+		return m, nil
+
+	case boostMsg:
+		// Status boosted/reblogged
+		if msg.err != nil {
+			m.feed.statusMessage = fmt.Sprintf("Error: %v", msg.err)
+		} else {
+			m.feed.statusMessage = "Post boosted!"
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		return m.handleKeyPress(msg)
 	}
@@ -217,6 +253,13 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "f", "F":
+			// Open feed screen
+			m.screen = screenFeed
+			m.feed.loading = true
+			m.feed.err = nil
+			m.feed.timelineType = services.TimelineHome
+			return m, fetchTimelineCmd(m.ctx, m.user.ID, services.TimelineHome, 20)
 		}
 
 	case screenAnonymous:
@@ -226,6 +269,72 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "b", "B", "esc":
 			m.screen = screenWelcome
 			m.message = ""
+		}
+
+	case screenFeed:
+		switch msg.String() {
+		case "q", "ctrl+c":
+			return m, tea.Quit
+		case "b", "B", "esc":
+			m.screen = screenAuthenticated
+			return m, nil
+		case "up", "k":
+			// Navigate up
+			if m.feed.selectedIndex > 0 {
+				m.feed.selectedIndex--
+				// Adjust scroll offset if needed
+				if m.feed.selectedIndex < m.feed.scrollOffset {
+					m.feed.scrollOffset = m.feed.selectedIndex
+				}
+			}
+		case "down", "j":
+			// Navigate down
+			if m.feed.selectedIndex < len(m.feed.statuses)-1 {
+				m.feed.selectedIndex++
+				// Adjust scroll offset if needed (viewport shows 5 posts)
+				if m.feed.selectedIndex >= m.feed.scrollOffset+5 {
+					m.feed.scrollOffset = m.feed.selectedIndex - 4
+				}
+			}
+		case "h", "H":
+			// Switch to Home timeline
+			m.feed.loading = true
+			m.feed.timelineType = services.TimelineHome
+			return m, fetchTimelineCmd(m.ctx, m.user.ID, services.TimelineHome, 20)
+		case "l", "L":
+			// Switch to Local timeline
+			m.feed.loading = true
+			m.feed.timelineType = services.TimelineLocal
+			return m, fetchTimelineCmd(m.ctx, m.user.ID, services.TimelineLocal, 20)
+		case "f", "F":
+			// Switch to Federated timeline
+			m.feed.loading = true
+			m.feed.timelineType = services.TimelineFederated
+			return m, fetchTimelineCmd(m.ctx, m.user.ID, services.TimelineFederated, 20)
+		case "r", "R":
+			// Retry/refresh feed
+			m.feed.loading = true
+			return m, fetchTimelineCmd(m.ctx, m.user.ID, m.feed.timelineType, 20)
+		case "x", "X":
+			// Like the selected post (x for love)
+			if m.feed.selectedIndex < len(m.feed.statuses) {
+				status := m.feed.statuses[m.feed.selectedIndex]
+				// If it's a reblog, like the original post
+				if status.Reblog != nil {
+					return m, likeStatusCmd(m.ctx, m.user.ID, status.Reblog.ID)
+				}
+				return m, likeStatusCmd(m.ctx, m.user.ID, status.ID)
+			}
+		case "s", "S":
+			// Boost the selected post (s for share)
+			if m.feed.selectedIndex < len(m.feed.statuses) {
+				status := m.feed.statuses[m.feed.selectedIndex]
+				// If it's a reblog, boost the original post
+				if status.Reblog != nil {
+					return m, boostStatusCmd(m.ctx, m.user.ID, status.Reblog.ID)
+				}
+				return m, boostStatusCmd(m.ctx, m.user.ID, status.ID)
+			}
 		}
 	}
 
@@ -335,6 +444,8 @@ func (m Model) View() string {
 		return m.renderAuthenticated()
 	case screenAnonymous:
 		return m.renderAnonymous()
+	case screenFeed:
+		return m.renderFeed()
 	default:
 		// Fallback to welcome screen if unknown state
 		m.screen = screenWelcome
@@ -448,12 +559,12 @@ func (m Model) renderAuthenticated() string {
 ║  you'll be automatically logged in!         ║
 ║                                             ║
 ║  Available features:                        ║
-║  • View your Mastodon feed                  ║
+║  [F] View your Mastodon feed                ║
 ║  • Post to the fediverse                    ║
 ║  • Interact with posts (like, boost)        ║
 ║  • Chat roulette                            ║
 ║                                             ║
-║  [Coming in Phase 3]                        ║
+║  [Coming Soon...]                           ║
 ║                                             ║
 ║  [Q] Quit                                   ║
 ║                                             ║
