@@ -149,14 +149,35 @@ func (m *Model) renderFeedWithPosts() string {
 
 	b.WriteString(strings.Repeat("─", m.width) + "\n")
 
-	// Controls
-	b.WriteString("  ↑/↓ Navigate  [H]ome [L]ocal [F]ederated  ")
+	// Controls with colors
+	keyColor := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("208"))
+	subtleColor := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+
+	controls1 := fmt.Sprintf("  %s Navigate  %s %s %s  ",
+		subtleColor.Render("↑/↓"),
+		keyColor.Render("[H]")+"ome",
+		keyColor.Render("[L]")+"ocal",
+		keyColor.Render("[F]")+"ederated")
 	if m.feed.hasMore && !m.feed.loadingMore {
-		b.WriteString("[M] Load more  ")
+		controls1 += keyColor.Render("[M]") + " Load more  "
 	}
-	b.WriteString("\n")
-	b.WriteString("  [R] Reply  [X] Like  [S] Boost  [Ctrl+R] Refresh  [B]ack  [Q]uit\n")
-	b.WriteString(fmt.Sprintf("  Post %d/%d  •  %s\n", m.feed.selectedIndex+1, len(m.feed.statuses), statusMsg))
+	b.WriteString(controls1 + "\n")
+
+	controls2 := fmt.Sprintf("  %s Reply  %s Like  %s Boost  %s Refresh  %s  %s\n",
+		keyColor.Render("[R]"),
+		keyColor.Render("[X]"),
+		keyColor.Render("[S]"),
+		keyColor.Render("[Ctrl+R]"),
+		keyColor.Render("[B]")+"ack",
+		keyColor.Render("[Q]")+"uit")
+	b.WriteString(controls2)
+
+	// Status line with colors
+	statusColor := lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	if strings.Contains(statusMsg, "Error") {
+		statusColor = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+	}
+	b.WriteString(fmt.Sprintf("  Post %d/%d  •  %s\n", m.feed.selectedIndex+1, len(m.feed.statuses), statusColor.Render(statusMsg)))
 	b.WriteString(strings.Repeat("─", m.width) + "\n")
 
 	return b.String()
@@ -192,19 +213,26 @@ func (m *Model) renderPostMinimal(status services.MastodonStatus, selected bool)
 
 	var b strings.Builder
 
+	// Styles
+	authorStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("99"))
+	handleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	boostStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("208"))
+	selectionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
+
 	// Selection indicator
 	indicator := "  "
 	if selected {
-		indicator = "► "
+		indicator = selectionStyle.Render("► ")
 	}
 
 	// Show if it's a boost
 	if status.Reblog != nil {
-		b.WriteString(fmt.Sprintf("%s[Boosted by %s]\n", indicator, truncate(status.Account.DisplayName, 40)))
+		boostText := fmt.Sprintf("[Boosted by %s]", truncate(status.Account.DisplayName, 40))
+		b.WriteString(fmt.Sprintf("%s%s\n", indicator, boostStyle.Render(boostText)))
 	}
 
 	// Author and handle
-	b.WriteString(fmt.Sprintf("%s%s %s\n", indicator, author, handle))
+	b.WriteString(fmt.Sprintf("%s%s %s\n", indicator, authorStyle.Render(author), handleStyle.Render(handle)))
 
 	// Content (word-wrapped to terminal width - 4 for margins)
 	contentWidth := m.width - 4
@@ -221,18 +249,22 @@ func (m *Model) renderPostMinimal(status services.MastodonStatus, selected bool)
 		b.WriteString("  " + line + "\n")
 	}
 
-	// Interaction stats with indicators
+	// Interaction stats with indicators and colors
+	statsStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	highlightStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("10"))
+
 	likesStr := fmt.Sprintf("Likes: %d", likes)
 	if originalStatus.Favourited {
-		likesStr = fmt.Sprintf("Likes: %d [*]", likes) // You liked this
+		likesStr = fmt.Sprintf("Likes: %d %s", likes, highlightStyle.Render("[*]"))
 	}
 
 	boostsStr := fmt.Sprintf("Boosts: %d", boosts)
 	if originalStatus.Reblogged {
-		boostsStr = fmt.Sprintf("Boosts: %d [*]", boosts) // You boosted this
+		boostsStr = fmt.Sprintf("Boosts: %d %s", boosts, highlightStyle.Render("[*]"))
 	}
 
-	b.WriteString(fmt.Sprintf("  %s  %s  Replies: %d\n", likesStr, boostsStr, replies))
+	statsLine := fmt.Sprintf("%s  %s  Replies: %d", likesStr, boostsStr, replies)
+	b.WriteString("  " + statsStyle.Render(statsLine) + "\n")
 
 	return b.String()
 }

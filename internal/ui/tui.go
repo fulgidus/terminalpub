@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/ssh"
 	"github.com/fulgidus/terminalpub/internal/auth"
 	"github.com/fulgidus/terminalpub/internal/config"
@@ -15,6 +16,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	gossh "golang.org/x/crypto/ssh"
+)
+
+// Color styles for the UI
+var (
+	titleStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("99"))  // Cyan
+	keyStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("208")) // Orange
+	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))             // Green
+	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))              // Red
+	subtleStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))            // Gray
+	promptStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))             // Bright Blue
 )
 
 // AppContext holds shared services for the TUI
@@ -565,26 +576,80 @@ func executePostStatusCmd(ctx *AppContext, mastodonSvc *services.MastodonService
 
 // View renders the TUI
 func (m Model) View() string {
+	var content string
 	switch m.screen {
 	case screenWelcome:
-		return m.renderWelcome()
+		content = m.renderWelcome()
 	case screenLoginInstance:
-		return m.renderLoginInstance()
+		content = m.renderLoginInstance()
 	case screenLoginWaiting:
-		return m.renderLoginWaiting()
+		content = m.renderLoginWaiting()
 	case screenAuthenticated:
-		return m.renderAuthenticated()
+		content = m.renderAuthenticated()
 	case screenAnonymous:
-		return m.renderAnonymous()
+		content = m.renderAnonymous()
 	case screenFeed:
-		return m.renderFeed()
+		return m.renderFeed() // Feed uses full screen
 	case screenCompose:
-		return m.compose.View()
+		return m.centerContent(m.compose.View())
 	default:
 		// Fallback to welcome screen if unknown state
 		m.screen = screenWelcome
-		return m.renderWelcome()
+		content = m.renderWelcome()
 	}
+
+	// Center content for non-feed screens
+	return m.centerContent(content)
+}
+
+// centerContent centers content both horizontally and vertically
+func (m Model) centerContent(content string) string {
+	lines := strings.Split(content, "\n")
+
+	// Calculate content dimensions
+	contentHeight := len(lines)
+	contentWidth := 0
+	for _, line := range lines {
+		// Strip ANSI codes for width calculation
+		cleanLine := lipgloss.NewStyle().Render(line)
+		if len(cleanLine) > contentWidth {
+			contentWidth = len(cleanLine)
+		}
+	}
+
+	// Calculate vertical padding
+	verticalPadding := (m.height - contentHeight) / 2
+	if verticalPadding < 0 {
+		verticalPadding = 0
+	}
+
+	// Calculate horizontal padding
+	horizontalPadding := (m.width - contentWidth) / 2
+	if horizontalPadding < 0 {
+		horizontalPadding = 0
+	}
+
+	var b strings.Builder
+
+	// Add top padding
+	for i := 0; i < verticalPadding; i++ {
+		b.WriteString("\n")
+	}
+
+	// Add content with horizontal padding
+	for _, line := range lines {
+		b.WriteString(strings.Repeat(" ", horizontalPadding))
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+
+	// Add bottom padding to fill screen
+	remainingLines := m.height - verticalPadding - contentHeight
+	for i := 0; i < remainingLines; i++ {
+		b.WriteString("\n")
+	}
+
+	return b.String()
 }
 
 func (m Model) renderWelcome() string {
@@ -595,43 +660,58 @@ func (m Model) renderWelcome() string {
 
 	var b strings.Builder
 
-	// Top line
-	b.WriteString(strings.Repeat("─", m.width) + "\n")
-	b.WriteString("\n")
+	width := 60 // Fixed content width
 
-	// Content
-	b.WriteString("  terminalpub - ActivityPub for terminals\n\n")
-	b.WriteString(fmt.Sprintf("  Connected as: %s\n\n", status))
-	b.WriteString("  [L] Login with Mastodon\n")
-	b.WriteString("  [A] Continue anonymously\n")
-	b.WriteString("  [Q] Quit\n")
-	b.WriteString("\n")
+	// Title
+	title := titleStyle.Render("terminalpub")
+	subtitle := subtleStyle.Render("ActivityPub for terminals")
+	b.WriteString(centerText(title, width) + "\n")
+	b.WriteString(centerText(subtitle, width) + "\n\n")
+
+	// Status
+	statusLine := fmt.Sprintf("Connected as: %s", subtleStyle.Render(status))
+	b.WriteString(centerText(statusLine, width) + "\n\n")
+
+	// Options
+	b.WriteString(centerText(keyStyle.Render("[L]")+" Login with Mastodon", width) + "\n")
+	b.WriteString(centerText(keyStyle.Render("[A]")+" Continue anonymously", width) + "\n")
+	b.WriteString(centerText(keyStyle.Render("[Q]")+" Quit", width) + "\n")
 
 	if m.message != "" {
-		b.WriteString("  " + m.message + "\n\n")
+		b.WriteString("\n")
+		msgStyle := subtleStyle
+		if strings.Contains(m.message, "success") {
+			msgStyle = successStyle
+		} else if strings.Contains(m.message, "Error") {
+			msgStyle = errorStyle
+		}
+		b.WriteString(centerText(msgStyle.Render(m.message), width) + "\n")
 	}
-
-	// Bottom line
-	b.WriteString(strings.Repeat("─", m.width) + "\n")
 
 	return b.String()
 }
 
 func (m Model) renderLoginInstance() string {
 	var b strings.Builder
+	width := 60
 
-	b.WriteString(strings.Repeat("─", m.width) + "\n\n")
-	b.WriteString("  Login with Mastodon\n\n")
-	b.WriteString("  Enter your Mastodon instance:\n")
-	b.WriteString(fmt.Sprintf("  > %s\n\n", m.input))
-	b.WriteString("  Examples: mastodon.social, mas.to, fosstodon.org\n\n")
-	b.WriteString("  Press [Enter] to continue  [Esc] to go back\n\n")
+	// Title
+	b.WriteString(centerText(titleStyle.Render("Login with Mastodon"), width) + "\n\n")
+
+	// Prompt
+	b.WriteString(centerText("Enter your Mastodon instance:", width) + "\n")
+	b.WriteString(centerText(promptStyle.Render("> "+m.input+"█"), width) + "\n\n")
+
+	// Examples
+	b.WriteString(centerText(subtleStyle.Render("Examples: mastodon.social, mas.to, fosstodon.org"), width) + "\n\n")
+
+	// Instructions
+	b.WriteString(centerText(keyStyle.Render("[Enter]")+" to continue  "+keyStyle.Render("[Esc]")+" to go back", width) + "\n")
 
 	if m.message != "" {
-		b.WriteString("  " + m.message + "\n\n")
+		b.WriteString("\n")
+		b.WriteString(centerText(errorStyle.Render(m.message), width) + "\n")
 	}
-
-	b.WriteString(strings.Repeat("─", m.width) + "\n")
 
 	return b.String()
 }
@@ -647,19 +727,26 @@ func (m Model) renderLoginWaiting() string {
 	seconds := int(timeRemaining.Seconds()) % 60
 
 	var b strings.Builder
+	width := 60
 
-	b.WriteString(strings.Repeat("─", m.width) + "\n\n")
-	b.WriteString("  Waiting for Authorization\n\n")
-	b.WriteString("  1. Open your browser and visit:\n")
-	b.WriteString("     http://51.91.97.241/device\n\n")
-	b.WriteString("  2. Enter this code:\n")
-	b.WriteString(fmt.Sprintf("     %s\n\n", m.deviceAuth.UserCode))
-	b.WriteString("  3. Authorize terminalpub access\n\n")
-	b.WriteString("  Waiting for authorization...\n")
-	b.WriteString(fmt.Sprintf("  Code expires in: %02d:%02d\n\n", minutes, seconds))
-	b.WriteString("  [Esc] Cancel\n\n")
-	b.WriteString(strings.Repeat("─", m.width) + "\n")
-	b.WriteString("  Polling every 5 seconds...\n")
+	// Title
+	b.WriteString(centerText(titleStyle.Render("Waiting for Authorization"), width) + "\n\n")
+
+	// Instructions
+	b.WriteString(centerText("1. Open your browser and visit:", width) + "\n")
+	b.WriteString(centerText(promptStyle.Bold(true).Render("http://51.91.97.241/device"), width) + "\n\n")
+
+	b.WriteString(centerText("2. Enter this code:", width) + "\n")
+	b.WriteString(centerText(promptStyle.Bold(true).Render(m.deviceAuth.UserCode), width) + "\n\n")
+
+	b.WriteString(centerText("3. Authorize terminalpub access", width) + "\n\n")
+
+	// Status
+	b.WriteString(centerText(subtleStyle.Render("Waiting for authorization..."), width) + "\n")
+	expiryText := fmt.Sprintf("Code expires in: %02d:%02d", minutes, seconds)
+	b.WriteString(centerText(subtleStyle.Render(expiryText), width) + "\n\n")
+
+	b.WriteString(centerText(keyStyle.Render("[Esc]")+" Cancel", width) + "\n")
 
 	return b.String()
 }
@@ -671,23 +758,28 @@ func (m Model) renderAuthenticated() string {
 	}
 
 	var b strings.Builder
+	width := 60
 
-	// Top line
-	b.WriteString(strings.Repeat("─", m.width) + "\n")
-	b.WriteString("\n")
+	// Welcome message
+	welcomeMsg := fmt.Sprintf("Welcome, %s", titleStyle.Render("@"+username))
+	b.WriteString(centerText(welcomeMsg, width) + "\n\n")
 
-	// Content
-	b.WriteString(fmt.Sprintf("  Welcome, @%s\n\n", username))
-	b.WriteString("  Your SSH key has been associated with your account.\n")
-	b.WriteString("  Next time you connect, you'll be automatically logged in!\n\n")
-	b.WriteString("  [P] Compose new post\n")
-	b.WriteString("  [F] View your Mastodon feed\n")
-	b.WriteString("  [X] Logout\n")
-	b.WriteString("  [Q] Quit\n")
-	b.WriteString("\n")
+	b.WriteString(centerText(subtleStyle.Render("Your SSH key has been associated with your account."), width) + "\n")
+	b.WriteString(centerText(subtleStyle.Render("Next time you connect, you'll be automatically logged in!"), width) + "\n\n")
+
+	// Menu options
+	b.WriteString(centerText(keyStyle.Render("[P]")+" Compose new post", width) + "\n")
+	b.WriteString(centerText(keyStyle.Render("[F]")+" View your Mastodon feed", width) + "\n")
+	b.WriteString(centerText(keyStyle.Render("[X]")+" Logout", width) + "\n")
+	b.WriteString(centerText(keyStyle.Render("[Q]")+" Quit", width) + "\n")
 
 	if m.message != "" {
-		b.WriteString("  " + m.message + "\n\n")
+		b.WriteString("\n")
+		msgStyle := successStyle
+		if strings.Contains(m.message, "Error") {
+			msgStyle = errorStyle
+		}
+		b.WriteString(centerText(msgStyle.Render(m.message), width) + "\n")
 	}
 
 	// Bottom line

@@ -229,49 +229,65 @@ func (m ComposeModel) View() string {
 
 	b.WriteString("║" + strings.Repeat(" ", contentWidth-2) + "║\n")
 
-	// Character count
+	// Character count with colors
 	charCount := len(m.textarea.Value())
 	charLimit := m.textarea.CharLimit
-	charStyle := lipgloss.NewStyle()
+	charStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // Green
 	if charCount > charLimit {
-		charStyle = charStyle.Foreground(lipgloss.Color("9")) // Red
+		charStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("9")) // Red
+	} else if charCount > charLimit-50 {
+		charStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("11")) // Yellow
 	}
 	charCountStr := charStyle.Render(fmt.Sprintf("Characters: %d/%d", charCount, charLimit))
 	b.WriteString("║  " + padRight(charCountStr, contentWidth-2) + "║\n")
 
 	b.WriteString("║" + strings.Repeat(" ", contentWidth-2) + "║\n")
 
-	// Visibility selector
-	visibilityStr := fmt.Sprintf("Visibility: [%s ▼]", m.visibility)
+	// Visibility selector with colors
+	visStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("99"))
+	visibilityStr := visStyle.Render(fmt.Sprintf("Visibility: [%s ▼]", m.visibility))
 	b.WriteString("║  " + padRight(visibilityStr, contentWidth-2) + "║\n")
 
-	// Content warning
+	// Content warning with colors
+	cwStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	if m.cwEnabled {
+		cwStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
+	}
 	cwStr := "Content Warning: [ ] Add CW"
 	if m.cwEnabled {
-		cwStr = "Content Warning: [✓] CW Enabled"
+		cwStr = "Content Warning: [X] CW Enabled"
 	}
-	b.WriteString("║  " + padRight(cwStr, contentWidth-2) + "║\n")
+	b.WriteString("║  " + padRight(cwStyle.Render(cwStr), contentWidth-2) + "║\n")
 
 	b.WriteString("║" + strings.Repeat(" ", contentWidth-2) + "║\n")
 
-	// Keyboard shortcuts
-	shortcuts := "[Ctrl+P] Post  [Ctrl+W] Toggle CW  [Ctrl+V] Visibility  [Esc] Cancel"
+	// Keyboard shortcuts with colors
+	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("208"))
+	subtleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	shortcuts := fmt.Sprintf("%s Post  %s Toggle CW  %s Visibility  %s Cancel",
+		keyStyle.Render("[Ctrl+P]"),
+		keyStyle.Render("[Ctrl+W]"),
+		keyStyle.Render("[Ctrl+V]"),
+		keyStyle.Render("[Esc]"))
 	b.WriteString("║  " + padRight(shortcuts, contentWidth-2) + "║\n")
 
 	b.WriteString("║" + strings.Repeat(" ", contentWidth-2) + "║\n")
 
-	// Status message
+	// Status message with colors
 	if m.status != "" {
-		statusStyle := lipgloss.NewStyle()
+		statusStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("99"))
 		if strings.Contains(m.status, "Error") {
-			statusStyle = statusStyle.Foreground(lipgloss.Color("9")) // Red
+			statusStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("9")) // Red
 		} else if strings.Contains(m.status, "success") {
-			statusStyle = statusStyle.Foreground(lipgloss.Color("10")) // Green
+			statusStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // Green
+		} else if strings.Contains(m.status, "Posting") {
+			statusStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("11")) // Yellow
 		}
 		statusStr := statusStyle.Render("Status: " + m.status)
 		b.WriteString("║  " + padRight(statusStr, contentWidth-2) + "║\n")
 	} else {
-		b.WriteString("║  " + padRight("Status: Ready", contentWidth-2) + "║\n")
+		statusStr := subtleStyle.Render("Status: Ready")
+		b.WriteString("║  " + padRight(statusStr, contentWidth-2) + "║\n")
 	}
 
 	b.WriteString(bottomBorder)
