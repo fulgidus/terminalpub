@@ -13,6 +13,7 @@ import (
 	"github.com/fulgidus/terminalpub/internal/models"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	gossh "golang.org/x/crypto/ssh"
 )
 
 // AppContext holds shared services for the TUI
@@ -54,10 +55,10 @@ type Model struct {
 
 // NewModel creates a new TUI model
 func NewModel(ctx *AppContext, s ssh.Session) Model {
-	// Extract SSH public key
+	// Extract SSH public key in authorized_keys format
 	publicKey := ""
 	if s.PublicKey() != nil {
-		publicKey = string(s.PublicKey().Marshal())
+		publicKey = string(gossh.MarshalAuthorizedKey(s.PublicKey()))
 	}
 
 	return Model{
