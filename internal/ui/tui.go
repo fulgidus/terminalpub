@@ -132,7 +132,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.user = msg.user
 		m.authenticated = true
 		m.screen = screenAuthenticated
-		m.message = fmt.Sprintf("Welcome back, %s!", m.user.Username)
 		return m, nil
 
 	case deviceCodeMsg:
