@@ -15,9 +15,11 @@ import (
 	"github.com/charmbracelet/wish"
 	"github.com/charmbracelet/wish/bubbletea"
 	"github.com/charmbracelet/wish/logging"
+	"github.com/fulgidus/terminalpub/internal/auth"
 	"github.com/fulgidus/terminalpub/internal/config"
 	"github.com/fulgidus/terminalpub/internal/db"
 	"github.com/fulgidus/terminalpub/internal/handlers"
+	"github.com/fulgidus/terminalpub/internal/ui"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -37,6 +39,9 @@ func main() {
 	} else {
 		defer database.Close()
 		log.Println("Connected to PostgreSQL and Redis")
+
+		// Initialize app context for TUI
+		initAppContext(cfg, database)
 	}
 
 	// Setup HTTP server
@@ -137,13 +142,19 @@ func setupHTTPServer(cfg *config.Config, database *db.DB) *http.Server {
 	healthHandler := handlers.NewHealthHandler(database)
 	r.Handle("/health", healthHandler)
 
-	// Placeholder routes for future OAuth
-	r.Get("/device", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("OAuth Device Flow - Coming in Phase 2"))
-	})
-	r.Get("/oauth/callback", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("OAuth Callback - Coming in Phase 2"))
-	})
+	// OAuth Device Flow routes
+	if database != nil {
+		oauthHandler := handlers.NewOAuthHandler(database.Postgres, database.Redis, cfg)
+		r.Handle("/device", oauthHandler)
+		r.HandleFunc("/oauth/callback", oauthHandler.HandleCallback)
+	} else {
+		r.Get("/device", func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte("OAuth Device Flow - Database not available"))
+		})
+		r.Get("/oauth/callback", func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte("OAuth Callback - Database not available"))
+		})
+	}
 
 	// Placeholder routes for future ActivityPub
 	r.Get("/.well-known/webfinger", func(w http.ResponseWriter, r *http.Request) {
@@ -163,151 +174,38 @@ func setupHTTPServer(cfg *config.Config, database *db.DB) *http.Server {
 	}
 }
 
-// TUI code remains the same
+// Global app context for TUI
+var appCtx *ui.AppContext
+
+// initAppContext initializes the app context
+func initAppContext(cfg *config.Config, database *db.DB) {
+	if database == nil {
+		return
+	}
+
+	deviceFlowService := auth.NewDeviceFlowService(
+		database.Postgres,
+		fmt.Sprintf("http://%s/device", cfg.Server.Domain),
+	)
+	sshKeyService := auth.NewSSHKeyService(database.Postgres)
+	sessionManager := auth.NewSessionManager(database.Postgres, database.Redis)
+
+	appCtx = &ui.AppContext{
+		DB:                database.Postgres,
+		Redis:             database.Redis,
+		Config:            cfg,
+		DeviceFlowService: deviceFlowService,
+		SSHKeyService:     sshKeyService,
+		SessionManager:    sessionManager,
+	}
+}
+
+// teaHandler creates a new TUI model for each SSH session
 func teaHandler(s ssh.Session) (tea.Model, []tea.ProgramOption) {
-	m := model{
-		username: s.User(),
-		screen:   screenWelcome,
+	if appCtx == nil {
+		// Fallback if no database connection
+		return ui.NewModel(nil, s), []tea.ProgramOption{tea.WithAltScreen()}
 	}
-	return m, []tea.ProgramOption{tea.WithAltScreen()}
-}
 
-type screenType int
-
-const (
-	screenWelcome screenType = iota
-	screenAnonymous
-	screenLogin
-)
-
-type model struct {
-	username string
-	screen   screenType
-	message  string
-}
-
-func (m model) Init() tea.Cmd {
-	return nil
-}
-
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch m.screen {
-		case screenWelcome:
-			switch msg.String() {
-			case "q", "ctrl+c":
-				return m, tea.Quit
-			case "l", "L":
-				m.screen = screenLogin
-				m.message = "Login feature coming in Phase 2!"
-			case "a", "A":
-				m.screen = screenAnonymous
-				m.message = "Anonymous mode activated!"
-			}
-		case screenAnonymous:
-			switch msg.String() {
-			case "q", "ctrl+c", "esc":
-				return m, tea.Quit
-			case "b", "B":
-				m.screen = screenWelcome
-				m.message = ""
-			}
-		case screenLogin:
-			switch msg.String() {
-			case "q", "ctrl+c", "esc", "b", "B":
-				m.screen = screenWelcome
-				m.message = ""
-			}
-		}
-	}
-	return m, nil
-}
-
-func (m model) View() string {
-	switch m.screen {
-	case screenWelcome:
-		return m.renderWelcome()
-	case screenAnonymous:
-		return m.renderAnonymous()
-	case screenLogin:
-		return m.renderLogin()
-	default:
-		return "Unknown screen"
-	}
-}
-
-func (m model) renderWelcome() string {
-	return fmt.Sprintf(`
-╔════════════════════════════════════════════╗
-║        Welcome to terminalpub!             ║
-║        ActivityPub for terminals           ║
-╠════════════════════════════════════════════╣
-║                                            ║
-║  Connected as: %-27s ║
-║                                            ║
-║  Press a key to continue:                  ║
-║                                            ║
-║  [L] Login with Mastodon (Coming soon)     ║
-║  [A] Continue anonymously                  ║
-║  [Q] Quit                                  ║
-║                                            ║
-╚════════════════════════════════════════════╝
-
-%s
-`, m.username, m.message)
-}
-
-func (m model) renderAnonymous() string {
-	return fmt.Sprintf(`
-╔════════════════════════════════════════════╗
-║           Anonymous Mode                   ║
-╠════════════════════════════════════════════╣
-║                                            ║
-║  %s                                        ║
-║                                            ║
-║  You're browsing as: anonymous             ║
-║                                            ║
-║  Available features:                       ║
-║  • View public feed (Coming soon)          ║
-║  • Chat roulette (Coming soon)             ║
-║  • Browse hashtags (Coming soon)           ║
-║                                            ║
-║  Commands:                                 ║
-║  [B] Back to menu                          ║
-║  [Q] Quit                                  ║
-║                                            ║
-╚════════════════════════════════════════════╝
-
-🚧 This is a work in progress!
-Phase 1: Infrastructure ✅
-Phase 2: Authentication (Next)
-Phase 3: ActivityPub Integration
-`, m.message)
-}
-
-func (m model) renderLogin() string {
-	return fmt.Sprintf(`
-╔════════════════════════════════════════════╗
-║        Login with Mastodon                 ║
-╠════════════════════════════════════════════╣
-║                                            ║
-║  %s                                        ║
-║                                            ║
-║  OAuth Device Flow authentication will     ║
-║  be implemented in Phase 2!                ║
-║                                            ║
-║  This will allow you to:                   ║
-║  • Login with your Mastodon account        ║
-║  • Access your federated feed              ║
-║  • Post and interact with the fediverse    ║
-║  • Import your following/followers         ║
-║                                            ║
-║  Stay tuned!                               ║
-║                                            ║
-║  [B] Back to menu                          ║
-║  [Q] Quit                                  ║
-║                                            ║
-╚════════════════════════════════════════════╝
-`, m.message)
+	return ui.NewModel(appCtx, s), []tea.ProgramOption{tea.WithAltScreen()}
 }

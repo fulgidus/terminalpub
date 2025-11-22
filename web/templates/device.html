@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Authorization - terminalpub</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0d1117;
+            color: #c9d1d9;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 40px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+        }
+        
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .logo h1 {
+            color: #58a6ff;
+            font-size: 2em;
+            margin-bottom: 5px;
+        }
+        
+        .logo p {
+            color: #8b949e;
+            font-size: 0.9em;
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #c9d1d9;
+            font-weight: bold;
+        }
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            font-family: 'Courier New', monospace;
+            font-size: 1.2em;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+        
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.3);
+        }
+        
+        .button {
+            width: 100%;
+            padding: 12px;
+            background: #238636;
+            border: 1px solid #2ea043;
+            border-radius: 6px;
+            color: white;
+            font-family: 'Courier New', monospace;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .button:hover {
+            background: #2ea043;
+            box-shadow: 0 0 10px rgba(46, 160, 67, 0.5);
+        }
+        
+        .button:active {
+            transform: scale(0.98);
+        }
+        
+        .help-text {
+            color: #8b949e;
+            font-size: 0.9em;
+            margin-top: 8px;
+            text-align: center;
+        }
+        
+        .error {
+            background: #f85149;
+            color: white;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border: 1px solid #da3633;
+        }
+        
+        .success {
+            background: #238636;
+            color: white;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border: 1px solid #2ea043;
+        }
+        
+        .instructions {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        
+        .instructions h2 {
+            color: #58a6ff;
+            font-size: 1.2em;
+            margin-bottom: 15px;
+        }
+        
+        .instructions ol {
+            margin-left: 20px;
+            color: #8b949e;
+        }
+        
+        .instructions li {
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+        
+        .code-example {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            padding: 8px 12px;
+            border-radius: 4px;
+            color: #58a6ff;
+            font-weight: bold;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>terminalpub</h1>
+            <p>ActivityPub for your terminal</p>
+        </div>
+        
+        {{if .Error}}
+        <div class="error">
+            ❌ {{.Error}}
+        </div>
+        {{end}}
+        
+        {{if .Success}}
+        <div class="success">
+            ✅ {{.Success}}
+        </div>
+        {{else}}
+        <div class="instructions">
+            <h2>📋 Instructions</h2>
+            <ol>
+                <li>Connect to terminalpub via SSH</li>
+                <li>Select <strong>[L] Login with Mastodon</strong></li>
+                <li>You'll receive a code like <span class="code-example">WXYZ-1234</span></li>
+                <li>Enter that code below to authorize</li>
+            </ol>
+        </div>
+        
+        <form method="POST" action="/device">
+            <div class="form-group">
+                <label for="user_code">Enter Your Code:</label>
+                <input 
+                    type="text" 
+                    id="user_code" 
+                    name="user_code" 
+                    placeholder="XXXX-XXXX" 
+                    maxlength="9"
+                    pattern="[A-Za-z0-9]{4}-[A-Za-z0-9]{4}"
+                    required
+                    autofocus
+                    autocomplete="off"
+                >
+                <p class="help-text">Format: XXXX-XXXX (e.g., ABCD-1234)</p>
+            </div>
+            
+            <button type="submit" class="button">
+                Continue to Mastodon →
+            </button>
+        </form>
+        {{end}}
+    </div>
+    
+    <script>
+        // Auto-format input as user types
+        document.getElementById('user_code').addEventListener('input', function(e) {
+            let value = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+            if (value.length > 4) {
+                value = value.slice(0, 4) + '-' + value.slice(4, 8);
+            }
+            e.target.value = value;
+        });
+    </script>
+</body>
+</html>
