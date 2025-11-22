@@ -157,14 +157,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case timelineMsg:
 		// Timeline fetched
 		m.feed.loading = false
+		m.feed.loadingMore = false
+
 		if msg.err != nil {
 			m.feed.err = msg.err
+			m.feed.statusMessage = fmt.Sprintf("Error: %v", msg.err)
 		} else {
-			m.feed.statuses = msg.statuses
-			m.feed.timelineType = msg.timelineType
-			m.feed.selectedIndex = 0
-			m.feed.scrollOffset = 0
-			m.feed.err = nil
+			if msg.isLoadMore {
+				// Append new posts to existing ones
+				m.feed.statuses = append(m.feed.statuses, msg.statuses...)
+				m.feed.statusMessage = fmt.Sprintf("Loaded %d more posts", len(msg.statuses))
+
+				// Check if we got fewer posts than requested (no more available)
+				if len(msg.statuses) < 20 {
+					m.feed.hasMore = false
+					m.feed.statusMessage = "All posts loaded"
+				}
+			} else {
+				// Replace with new timeline
+				m.feed.statuses = msg.statuses
+				m.feed.timelineType = msg.timelineType
+				m.feed.selectedIndex = 0
+				m.feed.scrollOffset = 0
+				m.feed.err = nil
+				m.feed.hasMore = len(msg.statuses) >= 20
+				m.feed.statusMessage = "Timeline loaded"
+			}
 		}
 		return m, nil
 
@@ -314,7 +332,18 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "r", "R":
 			// Retry/refresh feed
 			m.feed.loading = true
+			m.feed.statusMessage = "Refreshing..."
 			return m, fetchTimelineCmd(m.ctx, m.user.ID, m.feed.timelineType, 20)
+		case "m", "M":
+			// Load more posts (pagination)
+			if m.feed.hasMore && !m.feed.loadingMore && len(m.feed.statuses) > 0 {
+				// Get the ID of the last post for pagination
+				lastPost := m.feed.statuses[len(m.feed.statuses)-1]
+				maxID := lastPost.ID
+				m.feed.loadingMore = true
+				m.feed.statusMessage = "Loading more..."
+				return m, loadMorePostsCmd(m.ctx, m.user.ID, m.feed.timelineType, 20, maxID)
+			}
 		case "x", "X":
 			// Like the selected post (x for love)
 			if m.feed.selectedIndex < len(m.feed.statuses) {

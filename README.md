@@ -151,6 +151,7 @@ Once authenticated, press **[F]** to view your Mastodon feed:
 - **F** - Switch to Federated timeline (all public posts)
 - **X** - Like/favourite the selected post
 - **S** - Boost/reblog the selected post
+- **M** - Load more posts (pagination)
 - **R** - Refresh feed
 - **B** - Back to main menu
 - **Q** - Quit
@@ -160,6 +161,8 @@ The feed shows 5 posts at a time with automatic scrolling. Posts display:
 - Post content (word-wrapped)
 - Interaction counts (likes, boosts, replies)
 - Selection indicator (►) for the current post
+
+**Pagination:** Press **[M]** to load 20 more posts. The status bar shows when more posts are available and loading progress.
 
 ## Architecture
 

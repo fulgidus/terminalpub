@@ -19,15 +19,18 @@ type FeedModel struct {
 	scrollOffset   int
 	timelineType   services.TimelineType
 	loading        bool
+	loadingMore    bool
 	err            error
 	viewportHeight int
 	statusMessage  string
+	hasMore        bool
 }
 
 // NewFeedModel creates a new feed model
 func NewFeedModel() FeedModel {
 	return FeedModel{
 		statuses:      []services.MastodonStatus{},
+		hasMore:       true,
 		selectedIndex: 0,
 		scrollOffset:  0,
 		timelineType:  services.TimelineHome,
@@ -136,16 +139,28 @@ func (m *Model) renderFeedWithPosts() string {
 	// Footer with controls
 	statusMsg := m.feed.statusMessage
 	if statusMsg == "" {
-		statusMsg = "Ready"
+		if m.feed.loadingMore {
+			statusMsg = "Loading more posts..."
+		} else if !m.feed.hasMore {
+			statusMsg = "No more posts"
+		} else {
+			statusMsg = "Ready"
+		}
 	}
+
+	moreHint := ""
+	if m.feed.hasMore && !m.feed.loadingMore {
+		moreHint = "[M] Load more  "
+	}
+
 	b.WriteString(fmt.Sprintf(`║                                            ║
 ║  ↑/↓ Navigate  [H]ome [L]ocal [F]ederated ║
-║  [X] Like  [S] Boost  [R] Refresh          ║
+║  [X] Like  [S] Boost  [R] Refresh  %s║
 ║  Post %d/%d  [B]ack  [Q]uit               ║
 ║                                            ║
 ║  Status: %-34s ║
 ╚════════════════════════════════════════════╝
-`, m.feed.selectedIndex+1, len(m.feed.statuses), truncate(statusMsg, 34)))
+`, truncate(moreHint, 8), m.feed.selectedIndex+1, len(m.feed.statuses), truncate(statusMsg, 34)))
 
 	return b.String()
 }
@@ -311,6 +326,32 @@ func fetchTimelineCmd(ctx *AppContext, userID int, timelineType services.Timelin
 		return timelineMsg{
 			statuses:     statuses,
 			timelineType: timelineType,
+			isLoadMore:   false,
+		}
+	}
+}
+
+// loadMorePostsCmd loads more posts for pagination
+func loadMorePostsCmd(ctx *AppContext, userID int, timelineType services.TimelineType, limit int, maxID string) tea.Cmd {
+	return func() tea.Msg {
+		mastodonService := services.NewMastodonService(ctx.DB)
+
+		statuses, err := mastodonService.GetTimeline(
+			context.Background(),
+			userID,
+			timelineType,
+			limit,
+			maxID,
+		)
+
+		if err != nil {
+			return timelineMsg{err: err, isLoadMore: true}
+		}
+
+		return timelineMsg{
+			statuses:     statuses,
+			timelineType: timelineType,
+			isLoadMore:   true,
 		}
 	}
 }
@@ -337,6 +378,7 @@ func boostStatusCmd(ctx *AppContext, userID int, statusID string) tea.Cmd {
 type timelineMsg struct {
 	statuses     []services.MastodonStatus
 	timelineType services.TimelineType
+	isLoadMore   bool
 	err          error
 }
 
