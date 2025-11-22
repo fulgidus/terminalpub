@@ -55,7 +55,7 @@ The GitHub Action will:
 Once deployed, you can connect to the server:
 
 ```bash
-ssh 51.91.97.241 -p 2223
+ssh 51.91.97.241
 ```
 
 ### Troubleshooting
