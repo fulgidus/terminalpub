@@ -1,8 +1,8 @@
 server:
-  domain: terminalpub.com
-  base_url: https://terminalpub.com
-  ssh_port: 2222
-  http_port: 8080
+  domain: 51.91.97.241  # Change to your domain or IP
+  base_url: http://51.91.97.241  # Change to your base URL
+  ssh_port: 22
+  http_port: 80
   https_port: 443
   tls:
     cert_file: /etc/terminalpub/cert.pem

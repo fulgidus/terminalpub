@@ -121,10 +121,10 @@ func DefaultConfig() *Config {
 	cfg := &Config{}
 
 	// Server defaults
-	cfg.Server.Domain = "localhost"
-	cfg.Server.BaseURL = "http://localhost:8080"
+	cfg.Server.Domain = "51.91.97.241"
+	cfg.Server.BaseURL = "http://51.91.97.241"
 	cfg.Server.SSHPort = "22"
-	cfg.Server.HTTPPort = "8080"
+	cfg.Server.HTTPPort = "80"
 	cfg.Server.HTTPSPort = "443"
 
 	// Database defaults
