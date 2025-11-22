@@ -200,7 +200,7 @@ func (m *Model) renderPostMinimal(status services.MastodonStatus, selected bool)
 
 	// Show if it's a boost
 	if status.Reblog != nil {
-		b.WriteString(fmt.Sprintf("%s🔄 %s boosted\n", indicator, truncate(status.Account.DisplayName, 40)))
+		b.WriteString(fmt.Sprintf("%s[Boosted by %s]\n", indicator, truncate(status.Account.DisplayName, 40)))
 	}
 
 	// Author and handle
@@ -221,8 +221,18 @@ func (m *Model) renderPostMinimal(status services.MastodonStatus, selected bool)
 		b.WriteString("  " + line + "\n")
 	}
 
-	// Interaction stats
-	b.WriteString(fmt.Sprintf("  ❤ %d  🔄 %d  💬 %d\n", likes, boosts, replies))
+	// Interaction stats with indicators
+	likesStr := fmt.Sprintf("Likes: %d", likes)
+	if originalStatus.Favourited {
+		likesStr = fmt.Sprintf("Likes: %d [*]", likes) // You liked this
+	}
+
+	boostsStr := fmt.Sprintf("Boosts: %d", boosts)
+	if originalStatus.Reblogged {
+		boostsStr = fmt.Sprintf("Boosts: %d [*]", boosts) // You boosted this
+	}
+
+	b.WriteString(fmt.Sprintf("  %s  %s  Replies: %d\n", likesStr, boostsStr, replies))
 
 	return b.String()
 }
@@ -263,7 +273,7 @@ func (m *Model) renderPostDynamic(status services.MastodonStatus, selected bool,
 
 	// Show if it's a boost
 	if status.Reblog != nil {
-		boostText := fmt.Sprintf("%s🔄 %s boosted:", style, truncate(status.Account.DisplayName, 20))
+		boostText := fmt.Sprintf("%s[Boosted by %s]", style, truncate(status.Account.DisplayName, 20))
 		b.WriteString("║ " + padRight(boostText, width-2) + " ║\n")
 	}
 
@@ -288,8 +298,18 @@ func (m *Model) renderPostDynamic(status services.MastodonStatus, selected bool,
 
 	b.WriteString("║" + strings.Repeat(" ", width) + "║\n")
 
-	// Interaction stats
-	statsText := fmt.Sprintf("  ❤ %-4d  🔄 %-4d  💬 %-4d", likes, boosts, replies)
+	// Interaction stats with indicators
+	likesStr := fmt.Sprintf("Likes: %-4d", likes)
+	if originalStatus.Favourited {
+		likesStr = fmt.Sprintf("Likes: %-4d [*]", likes)
+	}
+
+	boostsStr := fmt.Sprintf("Boosts: %-4d", boosts)
+	if originalStatus.Reblogged {
+		boostsStr = fmt.Sprintf("Boosts: %-4d [*]", boosts)
+	}
+
+	statsText := fmt.Sprintf("  %s  %s  Replies: %-4d", likesStr, boostsStr, replies)
 	b.WriteString("║ " + padRight(statsText, width-2) + " ║\n")
 
 	return b.String()

@@ -162,6 +162,7 @@ The feed shows 5 posts at a time with automatic scrolling. Posts display:
 - Post content (word-wrapped)
 - Interaction counts (likes, boosts, replies)
 - Selection indicator (►) for the current post
+- [*] marker on likes/boosts you've already interacted with
 
 **Pagination:** Press **[M]** to load 20 more posts. The status bar shows when more posts are available and loading progress.
 
