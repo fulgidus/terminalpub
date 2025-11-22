@@ -102,9 +102,10 @@ Mastodon instance: mastodon.social
 ╔════════════════════════════════╗
 ║          Main Menu             ║
 ╠════════════════════════════════╣
-║  [F] View Feed                 ║
-║  [P] Post (Coming Soon)        ║
-║  [C] Chat Roulette (Coming)    ║
+║  [P] Compose new post          ║
+║  [F] View your Mastodon feed   ║
+║  [N] View notifications        ║
+║  [X] Logout                    ║
 ║  [Q] Quit                      ║
 ╚════════════════════════════════╝
 ```
@@ -285,6 +286,57 @@ The profile view shows:
 - Follow status and button
 - Recent posts (20 most recent)
 - Navigate and interact with posts directly from profile
+
+### Notifications (Phase 4)
+
+Press **[N]** from the main menu to view your notifications:
+
+```
+                  Notifications (12)
+
+  ► Like: Bob Williams liked your post
+      "Just deployed my new SSH-based social network! ..."
+      2 minutes ago
+      ────────────────────────────
+
+    Boost: Carol Davis boosted your post
+      "Just deployed my new SSH-based social network! ..."
+      5 minutes ago
+      ────────────────────────────
+
+    Reply: Dave Wilson mentioned you
+      "@alice This is so cool! Can I contribute?"
+      10 minutes ago
+      ────────────────────────────
+
+    Follow: Eve Martinez started following you
+      15 minutes ago
+      ────────────────────────────
+
+  ↑/↓ Navigate  [Enter] View  [D] Dismiss  [C] Clear All  [ESC] Back
+```
+
+**Notification Controls:**
+- **↑/↓ or K/J** - Navigate between notifications
+- **Enter** - View the related post (thread) or profile (for follows)
+- **D** - Dismiss the selected notification
+- **C** - Clear all notifications
+- **Ctrl+R** - Refresh notifications
+- **Esc or B** - Return to main menu
+
+Notification types displayed:
+- **Mentions/Replies** - Someone mentioned you or replied to your post
+- **Likes** - Someone liked your post
+- **Boosts** - Someone boosted/reblogged your post
+- **Follows** - Someone started following you
+- **Follow Requests** - Someone requested to follow you (private accounts)
+- **Poll Results** - A poll you voted in has ended
+
+Features:
+- Shows relative timestamps (e.g., "5 minutes ago")
+- Auto-loads more notifications when scrolling near the end
+- Press Enter on mentions to view the conversation thread
+- Press Enter on follows to view the follower's profile
 
 ## Architecture
 

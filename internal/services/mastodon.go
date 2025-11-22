@@ -593,3 +593,142 @@ func (s *MastodonService) UnfollowAccount(ctx context.Context, userID int, accou
 
 	return nil
 }
+
+// NotificationType represents different types of Mastodon notifications
+type NotificationType string
+
+const (
+	NotificationMention  NotificationType = "mention"
+	NotificationReblog   NotificationType = "reblog"
+	NotificationFavourite NotificationType = "favourite"
+	NotificationFollow   NotificationType = "follow"
+	NotificationPoll     NotificationType = "poll"
+	NotificationFollowRequest NotificationType = "follow_request"
+	NotificationStatus   NotificationType = "status"
+	NotificationUpdate   NotificationType = "update"
+)
+
+// MastodonNotification represents a notification from Mastodon
+type MastodonNotification struct {
+	ID        string              `json:"id"`
+	Type      NotificationType    `json:"type"`
+	CreatedAt time.Time           `json:"created_at"`
+	Account   MastodonAccount     `json:"account"`
+	Status    *MastodonStatus     `json:"status,omitempty"`
+}
+
+// GetNotifications fetches notifications for the authenticated user
+func (s *MastodonService) GetNotifications(ctx context.Context, userID int, limit int, maxID string) ([]MastodonNotification, error) {
+	var accessToken, instanceURL string
+	err := s.db.QueryRow(ctx, `
+		SELECT access_token, instance_url
+		FROM mastodon_tokens
+		WHERE user_id = $1 AND is_primary = true
+		LIMIT 1
+	`, userID).Scan(&accessToken, &instanceURL)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user token: %w", err)
+	}
+
+	apiURL := fmt.Sprintf("%s/api/v1/notifications?limit=%d", instanceURL, limit)
+	if maxID != "" {
+		apiURL += fmt.Sprintf("&max_id=%s", maxID)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch notifications: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("mastodon API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var notifications []MastodonNotification
+	if err := json.NewDecoder(resp.Body).Decode(&notifications); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return notifications, nil
+}
+
+// DismissNotification dismisses a single notification
+func (s *MastodonService) DismissNotification(ctx context.Context, userID int, notificationID string) error {
+	var accessToken, instanceURL string
+	err := s.db.QueryRow(ctx, `
+		SELECT access_token, instance_url
+		FROM mastodon_tokens
+		WHERE user_id = $1 AND is_primary = true
+		LIMIT 1
+	`, userID).Scan(&accessToken, &instanceURL)
+
+	if err != nil {
+		return fmt.Errorf("failed to get user token: %w", err)
+	}
+
+	apiURL := fmt.Sprintf("%s/api/v1/notifications/%s/dismiss", instanceURL, notificationID)
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to dismiss notification: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("mastodon API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// ClearAllNotifications clears all notifications for the authenticated user
+func (s *MastodonService) ClearAllNotifications(ctx context.Context, userID int) error {
+	var accessToken, instanceURL string
+	err := s.db.QueryRow(ctx, `
+		SELECT access_token, instance_url
+		FROM mastodon_tokens
+		WHERE user_id = $1 AND is_primary = true
+		LIMIT 1
+	`, userID).Scan(&accessToken, &instanceURL)
+
+	if err != nil {
+		return fmt.Errorf("failed to get user token: %w", err)
+	}
+
+	apiURL := fmt.Sprintf("%s/api/v1/notifications/clear", instanceURL)
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to clear notifications: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("mastodon API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}

@@ -52,6 +52,7 @@ const (
 	screenCompose
 	screenThread
 	screenProfile
+	screenNotifications
 )
 
 // Model represents the TUI state
@@ -71,6 +72,7 @@ type Model struct {
 	compose        ComposeModel
 	thread         ThreadModel
 	profile        ProfileModel
+	notifications  NotificationsModel
 	mastodonSvc    *services.MastodonService
 	width          int
 	height         int
@@ -352,6 +354,15 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.returnToScreen = screenAuthenticated
 			m.screen = screenCompose
 			return m, m.compose.Init()
+		case "n", "N":
+			// Open notifications screen
+			bgCtx := context.Background()
+			m.notifications = NewNotificationsModel(bgCtx, m.user.ID, m.mastodonSvc)
+			m.notifications.width = m.width
+			m.notifications.height = m.height
+			m.returnToScreen = screenAuthenticated
+			m.screen = screenNotifications
+			return m, m.notifications.Init()
 		}
 
 	case screenAnonymous:
@@ -594,6 +605,70 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.profile, cmd = m.profile.Update(msg)
 		return m, cmd
+
+	case screenNotifications:
+		// Handle notifications screen keys
+		switch msg.String() {
+		case "esc", "b", "B":
+			// Return to previous screen
+			m.screen = m.returnToScreen
+			return m, nil
+		case "up", "k":
+			// Navigate up in notifications list
+			if m.notifications.selectedIndex > 0 {
+				m.notifications.selectedIndex--
+			}
+		case "down", "j":
+			// Navigate down in notifications list
+			if m.notifications.selectedIndex < len(m.notifications.notifications)-1 {
+				m.notifications.selectedIndex++
+				// Auto-load more when near end
+				notifsRemaining := len(m.notifications.notifications) - m.notifications.selectedIndex
+				if notifsRemaining <= 3 && m.notifications.hasMore && !m.notifications.loadingMore && !m.notifications.loading {
+					m.notifications.loadingMore = true
+					return m, m.notifications.fetchNotificationsCmd(true)
+				}
+			}
+		case "enter":
+			// View the notification (go to status or profile)
+			if selectedNotif := m.notifications.GetSelectedNotification(); selectedNotif != nil {
+				// If notification has a status, view it in thread
+				if selectedNotif.Status != nil {
+					bgCtx := context.Background()
+					m.thread = NewThreadModel(bgCtx, m.user.ID, m.mastodonSvc, *selectedNotif.Status)
+					m.thread.width = m.width
+					m.thread.height = m.height
+					m.returnToScreen = screenNotifications
+					m.screen = screenThread
+					return m, m.thread.Init()
+				} else if selectedNotif.Type == services.NotificationFollow {
+					// For follows, view the profile
+					bgCtx := context.Background()
+					m.profile = NewProfileModel(bgCtx, m.user.ID, m.mastodonSvc, selectedNotif.Account.ID)
+					m.profile.width = m.width
+					m.profile.height = m.height
+					m.returnToScreen = screenNotifications
+					m.screen = screenProfile
+					return m, m.profile.Init()
+				}
+			}
+		case "d", "D":
+			// Dismiss selected notification
+			if selectedNotif := m.notifications.GetSelectedNotification(); selectedNotif != nil {
+				return m, m.dismissNotificationCmd(selectedNotif.ID)
+			}
+		case "c", "C":
+			// Clear all notifications
+			return m, m.clearAllNotificationsCmd()
+		case "ctrl+r":
+			// Refresh notifications
+			m.notifications.loading = true
+			return m, m.notifications.fetchNotificationsCmd(false)
+		}
+		// Delegate other updates to notifications model
+		var cmd tea.Cmd
+		m.notifications, cmd = m.notifications.Update(msg)
+		return m, cmd
 	}
 
 	return m, nil
@@ -729,6 +804,8 @@ func (m Model) View() string {
 		return m.thread.View()
 	case screenProfile:
 		return m.profile.View()
+	case screenNotifications:
+		return m.notifications.View()
 	default:
 		// Fallback to welcome screen if unknown state
 		m.screen = screenWelcome
@@ -907,6 +984,7 @@ func (m Model) renderAuthenticated() string {
 	// Menu options
 	b.WriteString(centerText(keyStyle.Render("[P]")+" Compose new post", width) + "\n")
 	b.WriteString(centerText(keyStyle.Render("[F]")+" View your Mastodon feed", width) + "\n")
+	b.WriteString(centerText(keyStyle.Render("[N]")+" View notifications", width) + "\n")
 	b.WriteString(centerText(keyStyle.Render("[X]")+" Logout", width) + "\n")
 	b.WriteString(centerText(keyStyle.Render("[Q]")+" Quit", width) + "\n")
 
@@ -969,6 +1047,32 @@ func (m Model) toggleFollowCmd() tea.Cmd {
 		return followActionMsg{
 			following: following,
 			err:       err,
+		}
+	}
+}
+
+// dismissNotificationCmd dismisses a single notification
+func (m Model) dismissNotificationCmd(notificationID string) tea.Cmd {
+	return func() tea.Msg {
+		err := m.mastodonSvc.DismissNotification(m.notifications.ctx, m.user.ID, notificationID)
+		return dismissNotificationMsg{
+			notificationID: notificationID,
+			err:            err,
+		}
+	}
+}
+
+// clearAllNotificationsCmd clears all notifications
+func (m Model) clearAllNotificationsCmd() tea.Cmd {
+	return func() tea.Msg {
+		err := m.mastodonSvc.ClearAllNotifications(m.notifications.ctx, m.user.ID)
+		if err != nil {
+			return notificationsLoadedMsg{err: err}
+		}
+		// Return empty notifications list
+		return notificationsLoadedMsg{
+			notifications: []services.MastodonNotification{},
+			isLoadMore:    false,
 		}
 	}
 }
