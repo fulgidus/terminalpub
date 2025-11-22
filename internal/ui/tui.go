@@ -383,6 +383,17 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if m.feed.selectedIndex >= m.feed.scrollOffset+5 {
 					m.feed.scrollOffset = m.feed.selectedIndex - 4
 				}
+
+				// Infinite scrolling: auto-load more when near the end
+				postsRemaining := len(m.feed.statuses) - m.feed.selectedIndex
+				if postsRemaining <= 5 && m.feed.hasMore && !m.feed.loadingMore && !m.feed.loading {
+					// Trigger auto-load
+					lastPost := m.feed.statuses[len(m.feed.statuses)-1]
+					maxID := lastPost.ID
+					m.feed.loadingMore = true
+					m.feed.statusMessage = "Loading more..."
+					return m, loadMorePostsCmd(m.ctx, m.user.ID, m.feed.timelineType, 20, maxID)
+				}
 			}
 		case "h", "H":
 			// Switch to Home timeline
@@ -404,16 +415,7 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.feed.loading = true
 			m.feed.statusMessage = "Refreshing..."
 			return m, fetchTimelineCmd(m.ctx, m.user.ID, m.feed.timelineType, 20)
-		case "m", "M":
-			// Load more posts (pagination)
-			if m.feed.hasMore && !m.feed.loadingMore && len(m.feed.statuses) > 0 {
-				// Get the ID of the last post for pagination
-				lastPost := m.feed.statuses[len(m.feed.statuses)-1]
-				maxID := lastPost.ID
-				m.feed.loadingMore = true
-				m.feed.statusMessage = "Loading more..."
-				return m, loadMorePostsCmd(m.ctx, m.user.ID, m.feed.timelineType, 20, maxID)
-			}
+
 		case "x", "X":
 			// Like the selected post (x for love)
 			if m.feed.selectedIndex < len(m.feed.statuses) {

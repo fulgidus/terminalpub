@@ -153,13 +153,15 @@ func (m *Model) renderFeedWithPosts() string {
 	keyColor := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("208"))
 	subtleColor := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
 
-	controls1 := fmt.Sprintf("  %s Navigate  %s %s %s  ",
+	controls1 := fmt.Sprintf("  %s Navigate  %s %s %s",
 		subtleColor.Render("↑/↓"),
 		keyColor.Render("[H]")+"ome",
 		keyColor.Render("[L]")+"ocal",
 		keyColor.Render("[F]")+"ederated")
 	if m.feed.hasMore && !m.feed.loadingMore {
-		controls1 += keyColor.Render("[M]") + " Load more  "
+		controls1 += "  " + subtleColor.Render("(infinite scroll)")
+	} else if !m.feed.hasMore {
+		controls1 += "  " + subtleColor.Render("(end of feed)")
 	}
 	b.WriteString(controls1 + "\n")
 
