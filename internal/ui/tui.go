@@ -50,6 +50,7 @@ const (
 	screenAnonymous
 	screenFeed
 	screenCompose
+	screenThread
 )
 
 // Model represents the TUI state
@@ -67,6 +68,7 @@ type Model struct {
 	pollingTicker  *time.Ticker
 	feed           FeedModel
 	compose        ComposeModel
+	thread         ThreadModel
 	mastodonSvc    *services.MastodonService
 	width          int
 	height         int
@@ -456,12 +458,70 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.screen = screenCompose
 				return m, m.compose.Init()
 			}
+		case "t", "T":
+			// View thread for selected post
+			if m.feed.selectedIndex < len(m.feed.statuses) {
+				status := m.feed.statuses[m.feed.selectedIndex]
+				// If it's a reblog, view the thread of the original post
+				originalStatus := &status
+				if status.Reblog != nil {
+					originalStatus = status.Reblog
+				}
+				// Create thread model with background context
+				bgCtx := context.Background()
+				m.thread = NewThreadModel(bgCtx, m.user.ID, m.mastodonSvc, *originalStatus)
+				m.thread.width = m.width
+				m.thread.height = m.height
+				m.returnToScreen = screenFeed
+				m.screen = screenThread
+				return m, m.thread.Init()
+			}
 		}
 
 	case screenCompose:
 		// Delegate all compose screen updates to compose model
 		var cmd tea.Cmd
 		m.compose, cmd = m.compose.Update(msg)
+		return m, cmd
+
+	case screenThread:
+		// Handle thread screen keys
+		switch msg.String() {
+		case "esc":
+			// Return to feed
+			m.screen = m.returnToScreen
+			return m, nil
+		case "up", "k":
+			// Navigate up in thread
+			if m.thread.selectedIndex > 0 {
+				m.thread.selectedIndex--
+			}
+		case "down", "j":
+			// Navigate down in thread
+			if m.thread.selectedIndex < len(m.thread.flattenedThread)-1 {
+				m.thread.selectedIndex++
+			}
+		case "r", "R":
+			// Reply to selected post in thread
+			if selectedStatus := m.thread.GetSelectedStatus(); selectedStatus != nil {
+				author := selectedStatus.Account.Acct
+				content := stripHTML(selectedStatus.Content)
+				m.compose = NewReplyModel(selectedStatus.ID, author, content)
+				m.compose.width = m.width
+				m.compose.height = m.height
+				m.returnToScreen = screenThread
+				m.screen = screenCompose
+				return m, m.compose.Init()
+			}
+		case "o", "O":
+			// Open in browser (placeholder for now)
+			if selectedStatus := m.thread.GetSelectedStatus(); selectedStatus != nil && selectedStatus.URL != "" {
+				m.thread.statusMessage = fmt.Sprintf("URL: %s", selectedStatus.URL)
+			}
+		}
+		// Delegate other updates to thread model
+		var cmd tea.Cmd
+		m.thread, cmd = m.thread.Update(msg)
 		return m, cmd
 	}
 
@@ -594,6 +654,8 @@ func (m Model) View() string {
 		return m.renderFeed() // Feed uses full screen
 	case screenCompose:
 		return m.centerContent(m.compose.View())
+	case screenThread:
+		return m.thread.View()
 	default:
 		// Fallback to welcome screen if unknown state
 		m.screen = screenWelcome

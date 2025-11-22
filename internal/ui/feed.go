@@ -165,8 +165,9 @@ func (m *Model) renderFeedWithPosts() string {
 	}
 	b.WriteString(controls1 + "\n")
 
-	controls2 := fmt.Sprintf("  %s Reply  %s Like  %s Boost  %s Refresh  %s  %s\n",
+	controls2 := fmt.Sprintf("  %s Reply  %s Thread  %s Like  %s Boost  %s Refresh  %s  %s\n",
 		keyColor.Render("[R]"),
+		keyColor.Render("[T]"),
 		keyColor.Render("[X]"),
 		keyColor.Render("[S]"),
 		keyColor.Render("[Ctrl+R]"),

@@ -335,3 +335,51 @@ func (s *MastodonService) PostStatus(ctx context.Context, userID int, content, v
 
 	return status.ID, nil
 }
+
+// StatusContext represents the context of a status (ancestors and descendants)
+type StatusContext struct {
+	Ancestors   []MastodonStatus `json:"ancestors"`
+	Descendants []MastodonStatus `json:"descendants"`
+}
+
+// GetStatusContext fetches the context (thread) for a given status
+func (s *MastodonService) GetStatusContext(ctx context.Context, userID int, statusID string) (*StatusContext, error) {
+	var accessToken, instanceURL string
+	err := s.db.QueryRow(ctx, `
+		SELECT access_token, instance_url
+		FROM mastodon_tokens
+		WHERE user_id = $1 AND is_primary = true
+		LIMIT 1
+	`, userID).Scan(&accessToken, &instanceURL)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user token: %w", err)
+	}
+
+	apiURL := fmt.Sprintf("%s/api/v1/statuses/%s/context", instanceURL, statusID)
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch status context: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("mastodon API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var context StatusContext
+	if err := json.NewDecoder(resp.Body).Decode(&context); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &context, nil
+}

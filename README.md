@@ -149,10 +149,10 @@ Once authenticated, press **[F]** to view your Mastodon feed:
 - **H** - Switch to Home timeline (following only)
 - **L** - Switch to Local timeline (instance posts)
 - **F** - Switch to Federated timeline (all public posts)
+- **T** - View full conversation thread
 - **R** - Reply to the selected post
 - **X** - Like/favourite the selected post
 - **S** - Boost/reblog the selected post
-- **M** - Load more posts (pagination)
 - **Ctrl+R** - Refresh feed
 - **B** - Back to main menu
 - **Q** - Quit
@@ -164,7 +164,7 @@ The feed shows 5 posts at a time with automatic scrolling. Posts display:
 - Selection indicator (►) for the current post
 - [*] marker on likes/boosts you've already interacted with
 
-**Pagination:** Press **[M]** to load 20 more posts. The status bar shows when more posts are available and loading progress.
+**Infinite Scrolling:** The feed automatically loads more posts when you scroll near the end.
 
 ### Post Composition (Phase 4)
 
@@ -201,6 +201,45 @@ From the main menu, press **[P]** to compose a new post:
 
 **Reply to Posts:**
 From the feed, press **[R]** on any post to reply. The compose screen will show the original post context and automatically mention the author.
+
+### Conversation Threads (Phase 4)
+
+Press **[T]** on any post in the feed to view the full conversation thread:
+
+```
+                    Conversation Thread
+
+  Alice Johnson @alice@mastodon.social [Original Post]
+  Just deployed my new SSH-based social network!
+  Likes: 42  Boosts: 15  Replies: 8
+
+    └─▶ Bob Williams @bob@fosstodon.org
+        This looks amazing! How does federation work?
+        Likes: 12  Boosts: 2  Replies: 1
+
+      └─▶ Alice Johnson @alice@mastodon.social
+          It uses ActivityPub! Messages are sent...
+          Likes: 8  Boosts: 1  Replies: 0
+
+    └─▶ Carol Davis @carol@pixelfed.social
+        Can I post photos from the terminal?
+        Likes: 5  Boosts: 0  Replies: 2
+
+  ↑/↓ Navigate  [R] Reply  [ESC] Back  [O] View in Browser
+```
+
+**Thread Controls:**
+- **↑/↓ or K/J** - Navigate between posts in the thread
+- **R** - Reply to the selected post
+- **O** - Show URL to view in browser
+- **Esc** - Return to feed
+
+The thread view shows:
+- Hierarchical structure with indentation
+- Parent posts (ancestors)
+- The original/root post marked with [Original Post]
+- All replies (descendants) in tree order
+- Full conversation context
 
 ## Architecture
 
