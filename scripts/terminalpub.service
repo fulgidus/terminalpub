@@ -1,0 +1,29 @@
+[Unit]
+Description=Terminalpub SSH Server
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=terminalpub
+Group=terminalpub
+WorkingDirectory=/opt/terminalpub
+ExecStart=/opt/terminalpub/bin/terminalpub
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=terminalpub
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/terminalpub
+
+# Environment
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,61 @@
+server:
+  domain: terminalpub.com
+  base_url: https://terminalpub.com
+  ssh_port: 2222
+  http_port: 8080
+  https_port: 443
+  tls:
+    cert_file: /etc/terminalpub/cert.pem
+    key_file: /etc/terminalpub/key.pem
+    auto_cert: false
+
+database:
+  postgres:
+    host: localhost
+    port: 5432
+    user: terminalpub
+    password: ${POSTGRES_PASSWORD}
+    database: terminalpub
+    sslmode: disable
+    max_connections: 25
+  redis:
+    host: localhost
+    port: 6379
+    password: ""
+    db: 0
+
+oauth:
+  device_code_expiry: 600
+  poll_interval: 5
+  callback_url: https://terminalpub.com/oauth/callback
+
+activitypub:
+  enabled: true
+  user_agent: "terminalpub/0.1.0"
+  max_inbox_size: 1000
+  delivery_workers: 10
+  inbox_workers: 5
+  retry_max_attempts: 5
+  retry_base_delay: 30
+
+features:
+  chatroulette:
+    enabled: true
+    queue_timeout: 300
+  anonymous_posting:
+    enabled: true
+    rate_limit: 10
+  registration:
+    enabled: true
+    require_invite: false
+
+security:
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 60
+  blocked_instances: []
+
+logging:
+  level: info
+  format: json
+  output: stdout

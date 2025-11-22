@@ -1,0 +1,53 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      
+      - name: Run tests
+        run: |
+          go test -v -race ./...
+      
+      - name: Build binary
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o terminalpub ./cmd/server
+      
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p 2222 -H 51.91.97.241 >> ~/.ssh/known_hosts
+      
+      - name: Deploy to VPS
+        run: |
+          # Upload binary
+          scp -P 2222 terminalpub ubuntu@51.91.97.241:/tmp/terminalpub
+          
+          # Upload deployment script
+          scp -P 2222 scripts/deploy.sh ubuntu@51.91.97.241:/tmp/deploy.sh
+          
+          # Upload systemd service files
+          scp -P 2222 scripts/terminalpub.service ubuntu@51.91.97.241:/tmp/terminalpub.service
+          
+          # Run deployment
+          ssh -p 2222 ubuntu@51.91.97.241 'bash /tmp/deploy.sh'
+      
+      - name: Health check
+        run: |
+          sleep 5
+          ssh -p 2222 ubuntu@51.91.97.241 'systemctl is-active --quiet terminalpub && echo "Service is running" || echo "Service failed to start"'
