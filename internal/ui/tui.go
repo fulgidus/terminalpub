@@ -51,6 +51,7 @@ const (
 	screenFeed
 	screenCompose
 	screenThread
+	screenProfile
 )
 
 // Model represents the TUI state
@@ -69,6 +70,7 @@ type Model struct {
 	feed           FeedModel
 	compose        ComposeModel
 	thread         ThreadModel
+	profile        ProfileModel
 	mastodonSvc    *services.MastodonService
 	width          int
 	height         int
@@ -476,6 +478,24 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.screen = screenThread
 				return m, m.thread.Init()
 			}
+		case "p", "P":
+			// View profile for selected post author
+			if m.feed.selectedIndex < len(m.feed.statuses) {
+				status := m.feed.statuses[m.feed.selectedIndex]
+				// If it's a reblog, view the profile of the original author
+				accountID := status.Account.ID
+				if status.Reblog != nil {
+					accountID = status.Reblog.Account.ID
+				}
+				// Create profile model with background context
+				bgCtx := context.Background()
+				m.profile = NewProfileModel(bgCtx, m.user.ID, m.mastodonSvc, accountID)
+				m.profile.width = m.width
+				m.profile.height = m.height
+				m.returnToScreen = screenFeed
+				m.screen = screenProfile
+				return m, m.profile.Init()
+			}
 		}
 
 	case screenCompose:
@@ -522,6 +542,57 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Delegate other updates to thread model
 		var cmd tea.Cmd
 		m.thread, cmd = m.thread.Update(msg)
+		return m, cmd
+
+	case screenProfile:
+		// Handle profile screen keys
+		switch msg.String() {
+		case "esc", "b", "B":
+			// Return to previous screen
+			m.screen = m.returnToScreen
+			return m, nil
+		case "up", "k":
+			// Navigate up in posts list
+			if m.profile.selectedIndex > 0 {
+				m.profile.selectedIndex--
+			}
+		case "down", "j":
+			// Navigate down in posts list
+			if m.profile.selectedIndex < len(m.profile.statuses)-1 {
+				m.profile.selectedIndex++
+			}
+		case "f", "F":
+			// Follow/Unfollow
+			if m.profile.relationship != nil && m.profile.account != nil {
+				return m, m.toggleFollowCmd()
+			}
+		case "r", "R":
+			// Reply to selected post in profile
+			if selectedStatus := m.profile.GetSelectedStatus(); selectedStatus != nil {
+				author := selectedStatus.Account.Acct
+				content := stripHTML(selectedStatus.Content)
+				m.compose = NewReplyModel(selectedStatus.ID, author, content)
+				m.compose.width = m.width
+				m.compose.height = m.height
+				m.returnToScreen = screenProfile
+				m.screen = screenCompose
+				return m, m.compose.Init()
+			}
+		case "t", "T":
+			// View thread for selected post in profile
+			if selectedStatus := m.profile.GetSelectedStatus(); selectedStatus != nil {
+				bgCtx := context.Background()
+				m.thread = NewThreadModel(bgCtx, m.user.ID, m.mastodonSvc, *selectedStatus)
+				m.thread.width = m.width
+				m.thread.height = m.height
+				m.returnToScreen = screenProfile
+				m.screen = screenThread
+				return m, m.thread.Init()
+			}
+		}
+		// Delegate other updates to profile model
+		var cmd tea.Cmd
+		m.profile, cmd = m.profile.Update(msg)
 		return m, cmd
 	}
 
@@ -656,6 +727,8 @@ func (m Model) View() string {
 		return m.centerContent(m.compose.View())
 	case screenThread:
 		return m.thread.View()
+	case screenProfile:
+		return m.profile.View()
 	default:
 		// Fallback to welcome screen if unknown state
 		m.screen = screenWelcome
@@ -871,4 +944,31 @@ func (m Model) renderAnonymous() string {
 	b.WriteString(strings.Repeat("─", m.width) + "\n")
 
 	return b.String()
+}
+
+// toggleFollowCmd toggles follow/unfollow for the current profile
+func (m Model) toggleFollowCmd() tea.Cmd {
+	return func() tea.Msg {
+		if m.profile.relationship == nil || m.profile.account == nil {
+			return followActionMsg{err: fmt.Errorf("no relationship or account data")}
+		}
+
+		var err error
+		following := false
+
+		if m.profile.relationship.Following {
+			// Unfollow
+			err = m.mastodonSvc.UnfollowAccount(m.profile.ctx, m.user.ID, m.profile.accountID)
+			following = false
+		} else {
+			// Follow
+			err = m.mastodonSvc.FollowAccount(m.profile.ctx, m.user.ID, m.profile.accountID)
+			following = true
+		}
+
+		return followActionMsg{
+			following: following,
+			err:       err,
+		}
+	}
 }

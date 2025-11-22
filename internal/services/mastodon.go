@@ -383,3 +383,213 @@ func (s *MastodonService) GetStatusContext(ctx context.Context, userID int, stat
 
 	return &context, nil
 }
+
+// GetAccount fetches account information for a given account ID
+func (s *MastodonService) GetAccount(ctx context.Context, userID int, accountID string) (*MastodonAccount, error) {
+	var accessToken, instanceURL string
+	err := s.db.QueryRow(ctx, `
+		SELECT access_token, instance_url
+		FROM mastodon_tokens
+		WHERE user_id = $1 AND is_primary = true
+		LIMIT 1
+	`, userID).Scan(&accessToken, &instanceURL)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user token: %w", err)
+	}
+
+	apiURL := fmt.Sprintf("%s/api/v1/accounts/%s", instanceURL, accountID)
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch account: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("mastodon API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var account MastodonAccount
+	if err := json.NewDecoder(resp.Body).Decode(&account); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &account, nil
+}
+
+// GetAccountStatuses fetches recent statuses for a given account
+func (s *MastodonService) GetAccountStatuses(ctx context.Context, userID int, accountID string, limit int) ([]MastodonStatus, error) {
+	var accessToken, instanceURL string
+	err := s.db.QueryRow(ctx, `
+		SELECT access_token, instance_url
+		FROM mastodon_tokens
+		WHERE user_id = $1 AND is_primary = true
+		LIMIT 1
+	`, userID).Scan(&accessToken, &instanceURL)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user token: %w", err)
+	}
+
+	apiURL := fmt.Sprintf("%s/api/v1/accounts/%s/statuses?limit=%d", instanceURL, accountID, limit)
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch account statuses: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("mastodon API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var statuses []MastodonStatus
+	if err := json.NewDecoder(resp.Body).Decode(&statuses); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return statuses, nil
+}
+
+// AccountRelationship represents the relationship between the current user and another account
+type AccountRelationship struct {
+	ID         string `json:"id"`
+	Following  bool   `json:"following"`
+	FollowedBy bool   `json:"followed_by"`
+	Blocking   bool   `json:"blocking"`
+	Muting     bool   `json:"muting"`
+	Requested  bool   `json:"requested"`
+}
+
+// GetAccountRelationship fetches the relationship with a given account
+func (s *MastodonService) GetAccountRelationship(ctx context.Context, userID int, accountID string) (*AccountRelationship, error) {
+	var accessToken, instanceURL string
+	err := s.db.QueryRow(ctx, `
+		SELECT access_token, instance_url
+		FROM mastodon_tokens
+		WHERE user_id = $1 AND is_primary = true
+		LIMIT 1
+	`, userID).Scan(&accessToken, &instanceURL)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user token: %w", err)
+	}
+
+	apiURL := fmt.Sprintf("%s/api/v1/accounts/relationships?id[]=%s", instanceURL, accountID)
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch relationship: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("mastodon API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var relationships []AccountRelationship
+	if err := json.NewDecoder(resp.Body).Decode(&relationships); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if len(relationships) == 0 {
+		return nil, fmt.Errorf("no relationship found")
+	}
+
+	return &relationships[0], nil
+}
+
+// FollowAccount follows a given account
+func (s *MastodonService) FollowAccount(ctx context.Context, userID int, accountID string) error {
+	var accessToken, instanceURL string
+	err := s.db.QueryRow(ctx, `
+		SELECT access_token, instance_url
+		FROM mastodon_tokens
+		WHERE user_id = $1 AND is_primary = true
+		LIMIT 1
+	`, userID).Scan(&accessToken, &instanceURL)
+
+	if err != nil {
+		return fmt.Errorf("failed to get user token: %w", err)
+	}
+
+	apiURL := fmt.Sprintf("%s/api/v1/accounts/%s/follow", instanceURL, accountID)
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to follow account: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("mastodon API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// UnfollowAccount unfollows a given account
+func (s *MastodonService) UnfollowAccount(ctx context.Context, userID int, accountID string) error {
+	var accessToken, instanceURL string
+	err := s.db.QueryRow(ctx, `
+		SELECT access_token, instance_url
+		FROM mastodon_tokens
+		WHERE user_id = $1 AND is_primary = true
+		LIMIT 1
+	`, userID).Scan(&accessToken, &instanceURL)
+
+	if err != nil {
+		return fmt.Errorf("failed to get user token: %w", err)
+	}
+
+	apiURL := fmt.Sprintf("%s/api/v1/accounts/%s/unfollow", instanceURL, accountID)
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to unfollow account: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("mastodon API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}

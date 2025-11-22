@@ -150,6 +150,7 @@ Once authenticated, press **[F]** to view your Mastodon feed:
 - **L** - Switch to Local timeline (instance posts)
 - **F** - Switch to Federated timeline (all public posts)
 - **T** - View full conversation thread
+- **P** - View user profile
 - **R** - Reply to the selected post
 - **X** - Like/favourite the selected post
 - **S** - Boost/reblog the selected post
@@ -240,6 +241,50 @@ The thread view shows:
 - The original/root post marked with [Original Post]
 - All replies (descendants) in tree order
 - Full conversation context
+
+### User Profiles (Phase 4)
+
+Press **[P]** on any post in the feed to view the author's profile:
+
+```
+                    User Profile
+
+  Alice Johnson
+  @alice@mastodon.social
+
+  Software engineer | Terminal enthusiast | Fediverse advocate
+
+  Following: 342   Followers: 1,204   Posts: 3,892
+
+  [Following ✓]
+
+  ────────────────────────────────────────
+                Recent Posts
+  ────────────────────────────────────────
+
+  ► Just deployed my new SSH-based social network!
+    Likes: 42  Boosts: 15  Replies: 8
+    ────────────────────────────
+    Working on Phase 4 features today. Excited to...
+    Likes: 28  Boosts: 6  Replies: 3
+
+  ↑/↓ Navigate  [F] Follow/Unfollow  [R] Reply  [T] Thread  [ESC] Back
+```
+
+**Profile Controls:**
+- **↑/↓ or K/J** - Navigate between posts
+- **F** - Follow or unfollow the user
+- **R** - Reply to the selected post
+- **T** - View thread for the selected post
+- **Esc or B** - Return to feed
+
+The profile view shows:
+- User's display name and handle
+- Bio/description
+- Follower and following counts
+- Follow status and button
+- Recent posts (20 most recent)
+- Navigate and interact with posts directly from profile
 
 ## Architecture
 
