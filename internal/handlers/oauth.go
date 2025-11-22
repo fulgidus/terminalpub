@@ -194,19 +194,15 @@ func (h *OAuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create or get existing user
+	// Create or get existing user (with upsert logic)
 	username := fmt.Sprintf("%s@%s", token.Username, strings.TrimPrefix(deviceCode.InstanceURL, "https://"))
 	username = strings.ReplaceAll(username, ".", "_") // Sanitize username
 
-	user, err := h.userService.GetUserByUsername(ctx, username)
+	user, err := h.userService.GetOrCreateUser(ctx, username, "")
 	if err != nil {
-		// User doesn't exist, create new one
-		user, err = h.userService.CreateUser(ctx, username, "")
-		if err != nil {
-			log.Printf("Failed to create user: %v", err)
-			h.showError(w, "Failed to create user account")
-			return
-		}
+		log.Printf("Failed to get or create user: %v", err)
+		h.showError(w, "Failed to create user account")
+		return
 	}
 
 	// Store token

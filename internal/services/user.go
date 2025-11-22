@@ -158,6 +158,83 @@ func (s *UserService) GetUserByUsername(ctx context.Context, username string) (*
 	return &user, nil
 }
 
+// GetOrCreateUser gets an existing user or creates a new one (upsert)
+func (s *UserService) GetOrCreateUser(ctx context.Context, username, email string) (*models.User, error) {
+	// Try to get existing user first
+	user, err := s.GetUserByUsername(ctx, username)
+	if err == nil {
+		// User exists, return it
+		return user, nil
+	}
+
+	// User doesn't exist, create new one
+	// Generate ActivityPub keypair for the user
+	privateKey, publicKey, err := generateKeyPair()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate keypair: %w", err)
+	}
+
+	// Build ActivityPub URLs
+	domain := "51.91.97.241" // TODO: get from config
+	actorURL := fmt.Sprintf("http://%s/users/%s", domain, username)
+	inboxURL := fmt.Sprintf("http://%s/users/%s/inbox", domain, username)
+	outboxURL := fmt.Sprintf("http://%s/users/%s/outbox", domain, username)
+	followersURL := fmt.Sprintf("http://%s/users/%s/followers", domain, username)
+	followingURL := fmt.Sprintf("http://%s/users/%s/following", domain, username)
+
+	// Use INSERT ... ON CONFLICT to handle race conditions
+	query := `
+		INSERT INTO users (
+			username, email, private_key, public_key,
+			actor_url, inbox_url, outbox_url, followers_url, following_url
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		ON CONFLICT (username) DO UPDATE SET
+			updated_at = NOW()
+		RETURNING id, username, email, password_hash, primary_mastodon_instance,
+		          primary_mastodon_id, primary_mastodon_acct, private_key, public_key,
+		          actor_url, inbox_url, outbox_url, followers_url, following_url,
+		          created_at, updated_at, bio, avatar_url
+	`
+
+	user = &models.User{}
+	err = s.db.QueryRow(ctx, query,
+		username,
+		email,
+		privateKey,
+		publicKey,
+		actorURL,
+		inboxURL,
+		outboxURL,
+		followersURL,
+		followingURL,
+	).Scan(
+		&user.ID,
+		&user.Username,
+		&user.Email,
+		&user.PasswordHash,
+		&user.PrimaryMastodonInstance,
+		&user.PrimaryMastodonID,
+		&user.PrimaryMastodonAcct,
+		&user.PrivateKey,
+		&user.PublicKey,
+		&user.ActorURL,
+		&user.InboxURL,
+		&user.OutboxURL,
+		&user.FollowersURL,
+		&user.FollowingURL,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+		&user.Bio,
+		&user.AvatarURL,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create or get user: %w", err)
+	}
+
+	return user, nil
+}
+
 // UpdatePrimaryMastodonAccount updates the user's primary Mastodon account info
 func (s *UserService) UpdatePrimaryMastodonAccount(ctx context.Context, userID int, instance, mastodonID, acct string) error {
 	query := `
