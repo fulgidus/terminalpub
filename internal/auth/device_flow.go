@@ -88,7 +88,7 @@ func generateDeviceCode() (string, error) {
 // InitiateDeviceFlow starts a new device authorization flow
 func (d *DeviceFlowService) InitiateDeviceFlow(ctx context.Context, instanceURL, sshSessionID string) (*DeviceAuthResponse, error) {
 	// Generate codes
-	userCode, err := generateUserCode()
+	userCodeFormatted, err := generateUserCode()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate user code: %w", err)
 	}
@@ -100,6 +100,9 @@ func (d *DeviceFlowService) InitiateDeviceFlow(ctx context.Context, instanceURL,
 
 	expiresAt := time.Now().Add(DeviceCodeExpiry)
 
+	// Store normalized code (without hyphen) in database for easier lookup
+	userCodeNormalized := strings.ReplaceAll(userCodeFormatted, "-", "")
+
 	// Store in database
 	query := `
 		INSERT INTO device_codes (user_code, device_code, instance_url, ssh_session_id, verification_uri, expires_at)
@@ -109,7 +112,7 @@ func (d *DeviceFlowService) InitiateDeviceFlow(ctx context.Context, instanceURL,
 
 	var id int
 	err = d.db.QueryRow(ctx, query,
-		userCode,
+		userCodeNormalized, // Store without hyphen
 		deviceCode,
 		NormalizeInstanceURL(instanceURL),
 		sshSessionID,
@@ -122,7 +125,7 @@ func (d *DeviceFlowService) InitiateDeviceFlow(ctx context.Context, instanceURL,
 	}
 
 	return &DeviceAuthResponse{
-		UserCode:        userCode,
+		UserCode:        userCodeFormatted, // Return with hyphen for display
 		DeviceCode:      deviceCode,
 		VerificationURI: d.verificationURI,
 		ExpiresIn:       int(DeviceCodeExpiry.Seconds()),
@@ -133,8 +136,8 @@ func (d *DeviceFlowService) InitiateDeviceFlow(ctx context.Context, instanceURL,
 
 // GetDeviceCodeByUserCode retrieves a device code by user code
 func (d *DeviceFlowService) GetDeviceCodeByUserCode(ctx context.Context, userCode string) (*models.DeviceCode, error) {
-	// Normalize user code (remove spaces, convert to uppercase)
-	userCode = strings.ToUpper(strings.ReplaceAll(userCode, " ", ""))
+	// Normalize user code (remove spaces and hyphens, convert to uppercase)
+	userCode = strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(userCode, " ", ""), "-", ""))
 
 	query := `
 		SELECT id, user_code, device_code, instance_url, ssh_session_id, 
@@ -206,8 +209,8 @@ func (d *DeviceFlowService) GetDeviceCodeByDeviceCode(ctx context.Context, devic
 
 // AuthorizeDeviceCode marks a device code as authorized
 func (d *DeviceFlowService) AuthorizeDeviceCode(ctx context.Context, userCode string, userID int) error {
-	// Normalize user code
-	userCode = strings.ToUpper(strings.ReplaceAll(userCode, " ", ""))
+	// Normalize user code (remove spaces and hyphens, convert to uppercase)
+	userCode = strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(userCode, " ", ""), "-", ""))
 
 	query := `
 		UPDATE device_codes
