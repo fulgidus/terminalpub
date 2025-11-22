@@ -52,6 +52,8 @@ func NewComposeModel() ComposeModel {
 	ta.Focus()
 	ta.CharLimit = 500 // Mastodon default character limit
 	ta.ShowLineNumbers = false
+	ta.SetWidth(74) // Default width
+	ta.SetHeight(8) // Default height
 
 	return ComposeModel{
 		textarea:   ta,
@@ -90,6 +92,7 @@ func (m ComposeModel) Update(msg tea.Msg) (ComposeModel, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Handle special keys first
 		switch msg.String() {
 		case "esc":
 			// Cancel and return to previous screen
@@ -127,6 +130,14 @@ func (m ComposeModel) Update(msg tea.Msg) (ComposeModel, tea.Cmd) {
 			// Cycle visibility
 			m.visibility = m.nextVisibility()
 			return m, nil
+
+		default:
+			// Pass all other keys to textarea
+			if !m.posting {
+				m.textarea, cmd = m.textarea.Update(msg)
+				cmds = append(cmds, cmd)
+			}
+			return m, tea.Batch(cmds...)
 		}
 
 	case tea.WindowSizeMsg:
@@ -134,28 +145,10 @@ func (m ComposeModel) Update(msg tea.Msg) (ComposeModel, tea.Cmd) {
 		m.height = msg.Height
 		m.textarea.SetWidth(m.width - 6)    // Account for padding and borders
 		m.textarea.SetHeight(m.height - 15) // Account for header, footer, and controls
-
-	case postStatusResultMsg:
-		m.posting = false
-		if msg.err != nil {
-			m.status = fmt.Sprintf("Error: %v", msg.err)
-			m.err = msg.err
-		} else {
-			m.posted = true
-			m.status = "Posted successfully!"
-			// Return to previous screen after a brief delay
-			return m, func() tea.Msg {
-				return composeSuccessMsg{statusID: msg.statusID}
-			}
-		}
 		return m, nil
 	}
 
-	// Update textarea
-	m.textarea, cmd = m.textarea.Update(msg)
-	cmds = append(cmds, cmd)
-
-	return m, tea.Batch(cmds...)
+	return m, nil
 }
 
 // View renders the compose screen

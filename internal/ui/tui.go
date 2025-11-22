@@ -225,15 +225,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle post status request from compose screen
 		return m, executePostStatusCmd(m.ctx, m.mastodonSvc, m.user.ID, msg.content, string(msg.visibility), msg.replyToID, msg.contentWarning)
 
+	case postStatusResultMsg:
+		// Post completed (success or error) - update compose model
+		m.compose.posting = false
+		if msg.err != nil {
+			m.compose.status = fmt.Sprintf("Error: %v", msg.err)
+			m.compose.err = msg.err
+		} else {
+			// Success - return to previous screen
+			m.screen = m.returnToScreen
+			m.message = "Post created successfully!"
+			// Refresh feed if we're returning to feed
+			if m.returnToScreen == screenFeed {
+				m.feed.loading = true
+				return m, fetchTimelineCmd(m.ctx, m.user.ID, m.feed.timelineType, 20)
+			}
+		}
+		return m, nil
+
 	case composeCancelMsg:
 		// User cancelled compose - return to previous screen
 		m.screen = m.returnToScreen
-		return m, nil
-
-	case composeSuccessMsg:
-		// Post successful - return to previous screen
-		m.screen = m.returnToScreen
-		m.message = "Post created successfully!"
 		return m, nil
 
 	case tea.KeyMsg:
